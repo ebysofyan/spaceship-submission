@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: logistics-analytics
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      # Secret: set in the Render dashboard. Empty = rules mode (app still works).
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_BASE_URL
+        value: https://api.openai.com/v1
+      - key: AI_MODEL
+        value: gpt-4o-mini
