@@ -43,6 +43,8 @@ export function DynamicChart({ result, height = 260 }: { result: QueryResult; he
     return isRate && item.payload?.base != null ? `${value} · base ${formatInt(item.payload.base)} orders` : value;
   };
   const axisProps = { tickLine: false, axisLine: false, tick: AXIS_TICK };
+  // Counts are whole numbers; without this, small series repeat ticks (1, 1, 2, 2).
+  const allowDecimals = !["order_count", "delivered_count", "delayed_count", "units"].includes(result.spec.metric);
 
   if (chart.type === "line") {
     return (
@@ -56,7 +58,7 @@ export function DynamicChart({ result, height = 260 }: { result: QueryResult; he
           </defs>
           <CartesianGrid vertical={false} stroke={CHART.grid} />
           <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" minTickGap={16} />
-          <YAxis {...axisProps} width={56} tickFormatter={axisFmt} />
+          <YAxis {...axisProps} width={56} tickFormatter={axisFmt} allowDecimals={allowDecimals} />
           <Tooltip contentStyle={TOOLTIP_STYLE} formatter={tipValue} />
           <Area type="linear" dataKey="value" name={metricLabel} stroke={CHART.line} strokeWidth={2} fill={`url(#${gradientId})`} />
         </AreaChart>
@@ -70,7 +72,7 @@ export function DynamicChart({ result, height = 260 }: { result: QueryResult; he
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid vertical={false} stroke={CHART.grid} />
           <XAxis dataKey="label" {...axisProps} interval={0} />
-          <YAxis {...axisProps} width={56} tickFormatter={axisFmt} />
+          <YAxis {...axisProps} width={56} tickFormatter={axisFmt} allowDecimals={allowDecimals} />
           <Tooltip cursor={{ fill: CHART.hover }} contentStyle={TOOLTIP_STYLE} formatter={tipValue} />
           <Bar dataKey="value" name={metricLabel} fill={CHART.bar} stroke={CHART.barEdge} radius={[4, 4, 0, 0]} maxBarSize={48} />
         </BarChart>

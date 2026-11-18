@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { AlertCircle, ChevronDown } from "lucide-react";
-import type { AskResponse, ForecastResult, Interpretation, QuerySpec } from "@app/core";
+import type { AskResponse, ForecastResult, QueryResult, QuerySpec } from "@app/core";
 import { DynamicChart } from "../components/DynamicChart";
 import { ForecastChart } from "../components/ForecastChart";
 import { ForecastTable, OrdersTable, ResultTable } from "../components/DataTables";
@@ -9,6 +9,11 @@ import { Card } from "../components/ui/Card";
 import { Chip } from "../components/ui/Button";
 import { Notes } from "../components/ui/States";
 import { formatDayRange, formatInt, formatTarget, methodLabel, sourceLabel, toolLabel } from "../format";
+
+const SOURCE_TITLE: Record<"llm" | "rules", string> = {
+  llm: "Interpreted by an LLM",
+  rules: "Deterministic keyword interpreter - set AI_API_KEY to enable LLM interpretation",
+};
 
 export function AnswerCard({
   response,
@@ -23,160 +28,101 @@ export function AnswerCard({
   if (interpretation.tool === "unsupported" || response.error) {
     return <Refusal response={response} examples={examples} onAsk={onAsk} />;
   }
+  const notes = [...(query?.notes ?? []), ...(forecast?.warnings ?? [])];
+  const parts = query ? queryParts(query) : forecast ? forecastParts(forecast) : [toolLabel(interpretation.tool)];
 
   return (
-    <Card className="p-5 sm:p-6">
-      <div className="space-y-6">
-        <div>
-          <p className="text-sm text-muted">{response.question}</p>
-          <p className="mt-2 text-lg leading-relaxed text-ink sm:text-xl">{response.answer}</p>
-        </div>
+    <Card className="space-y-6 p-5 sm:p-6">
+      <div>
+        <p className="text-sm text-muted">{response.question}</p>
+        <p className="mt-2 text-lg leading-relaxed text-ink sm:text-xl">{response.answer}</p>
+      </div>
 
-        {query && <DynamicChart result={query} />}
-        {forecast && <ForecastChart result={forecast} />}
+      {query && <DynamicChart result={query} />}
+      {forecast && <ForecastChart result={forecast} />}
 
-        <Computation
-          reasoning={interpretation.reasoning}
-          tool={interpretation.tool}
-          source={interpretation.source}
-          query={query}
-          forecast={forecast}
-        />
+      <div className="flex flex-wrap gap-2">
+        {parts.map((part) => (
+          <Badge key={part}>{part}</Badge>
+        ))}
+        <Badge tone={interpretation.source === "llm" ? "accent" : "neutral"} title={SOURCE_TITLE[interpretation.source]}>
+          {sourceLabel(interpretation.source)}
+        </Badge>
+      </div>
 
-        <div className="space-y-3">
-          <Disclosure title="Structured query (JSON)">
+      {notes.length > 0 && <Notes items={notes} />}
+
+      <details className="group rounded-control border border-line">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-control px-4 py-3 text-sm font-medium text-ink transition-colors hover:bg-subtle [&::-webkit-details-marker]:hidden">
+          Details
+          <ChevronDown className="shrink-0 text-muted transition-transform group-open:rotate-180" size={16} aria-hidden="true" />
+        </summary>
+        <div className="space-y-6 border-t border-line p-4">
+          <Section title="Reasoning">
+            <p className="text-sm leading-relaxed text-body">{interpretation.reasoning}</p>
+          </Section>
+          {(query || forecast) && (
+            <Section title="Metric definition">
+              <p className="text-sm leading-relaxed text-body">{query?.metricDefinition ?? forecast?.methodology}</p>
+            </Section>
+          )}
+          <Section title="Structured query (JSON)">
             <pre className="overflow-x-auto rounded-control bg-dark-0 p-4 text-xs leading-relaxed text-white">
               {JSON.stringify(interpretation.args, null, 2)}
             </pre>
-          </Disclosure>
+          </Section>
           {query && query.rows.length > 0 && (
-            <Disclosure title="Result table">
+            <Section title="Result table">
               <ResultTable result={query} />
-            </Disclosure>
+            </Section>
           )}
           {forecast && (
-            <Disclosure title="Forecast table">
+            <Section title="Forecast table">
               <ForecastTable result={forecast} />
-            </Disclosure>
+            </Section>
           )}
           {query && (
-            <Disclosure title={`Orders in scope (${formatInt(query.matchedOrders)} after filters and date range, showing first ${query.sampleOrders.length})`}>
+            <Section title={`Orders in scope (${formatInt(query.matchedOrders)}, showing first ${query.sampleOrders.length})`}>
               <OrdersTable orders={query.sampleOrders} />
-            </Disclosure>
+            </Section>
           )}
         </div>
-      </div>
+      </details>
     </Card>
   );
 }
 
-const SOURCE_TITLE: Record<"llm" | "rules", string> = {
-  llm: "Interpreted by an LLM",
-  rules: "Deterministic keyword interpreter - set AI_API_KEY to enable LLM interpretation",
-};
-
-function Computation({
-  reasoning,
-  tool,
-  source,
-  query,
-  forecast,
-}: {
-  reasoning: string;
-  tool: Interpretation["tool"];
-  source: "llm" | "rules";
-  query?: AskResponse["query"];
-  forecast?: ForecastResult;
-}) {
-  const notes = [...(query?.notes ?? []), ...(forecast?.warnings ?? [])];
-  return (
-    <section aria-labelledby="how-computed" className="rounded-card border border-line bg-surface p-4 sm:p-5">
-      <h3 id="how-computed" className="text-sm font-bold text-ink">
-        How this was computed
-      </h3>
-      <dl className="mt-4 grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2">
-        <Field label="Tool">
-          <Badge>{toolLabel(tool)}</Badge>
-        </Field>
-        <Field label="Source">
-          <Badge tone={source === "llm" ? "accent" : "neutral"} title={SOURCE_TITLE[source]}>
-            {sourceLabel(source)}
-          </Badge>
-        </Field>
-        <Field label="Reasoning">{reasoning}</Field>
-
-        {query && (
-          <Field label="Metric">
-            {query.metricLabel}
-            <span className="mt-0.5 block text-xs text-muted">{query.metricDefinition}</span>
-          </Field>
-        )}
-        {query && (
-          <Field label="Grouping">
-            {query.spec.groupBy ? `By ${query.spec.groupBy.replace("_", " ")}` : query.spec.timeGrain ? `By ${query.spec.timeGrain}` : "Total"}
-          </Field>
-        )}
-        {forecast && (
-          <>
-            <Field label="Target">{formatTarget(forecast.spec.target)}</Field>
-            <Field label="Model">
-              {methodLabel(forecast.method)}
-              <span className="mt-0.5 block text-xs text-muted">
-                {forecast.spec.horizonMonths} months ahead · demand in units per month
-              </span>
-            </Field>
-          </>
-        )}
-        {query && (
-          <Field label="Filters">
-            <FilterList filters={query.spec.filters} />
-          </Field>
-        )}
-        {query && (
-          <Field label="Date range">{query.resolvedRange ? formatDayRange(query.resolvedRange.from, query.resolvedRange.to) : "All dates"}</Field>
-        )}
-        {notes.length > 0 && (
-          <div className="sm:col-span-2">
-            <Notes items={notes} />
-          </div>
-        )}
-      </dl>
-    </section>
-  );
+// One-line summary, e.g. "Delay rate · by carrier · All dates · Filters: none".
+function queryParts(query: QueryResult): string[] {
+  const { spec } = query;
+  const grouping = spec.groupBy
+    ? `by ${spec.groupBy.replace("_", " ")}`
+    : spec.timeGrain
+      ? `by ${spec.timeGrain}`
+      : "Total";
+  const range = query.resolvedRange ? formatDayRange(query.resolvedRange.from, query.resolvedRange.to) : "All dates";
+  return [query.metricLabel, grouping, range, filterLabel(spec.filters)];
 }
 
-function FilterList({ filters }: { filters: QuerySpec["filters"] }) {
-  const entries = Object.entries(filters ?? {}).filter(([, values]) => values && values.length > 0);
-  if (entries.length === 0) return <>None</>;
-  return (
-    <span className="flex flex-wrap gap-1.5">
-      {entries.map(([dim, values]) => (
-        <Badge key={dim}>
-          {dim.replace("_", " ")}: {values?.join(", ")}
-        </Badge>
-      ))}
-    </span>
-  );
+function forecastParts(forecast: ForecastResult): string[] {
+  const { spec } = forecast;
+  const months = `${spec.horizonMonths} month${spec.horizonMonths === 1 ? "" : "s"}`;
+  return ["Forecast", formatTarget(spec.target), months, methodLabel(forecast.method)];
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function filterLabel(filters: QuerySpec["filters"]): string {
+  const parts = Object.entries(filters ?? {}).flatMap(([dim, values]) =>
+    values?.length ? [`${dim.replace("_", " ")} ${values.join(", ")}`] : [],
+  );
+  return `Filters: ${parts.length > 0 ? parts.join("; ") : "none"}`;
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="text-xs font-medium text-muted">{label}</dt>
-      <dd className="mt-1 text-ink">{children}</dd>
+      <h3 className="mb-2 text-sm font-bold text-ink">{title}</h3>
+      {children}
     </div>
-  );
-}
-
-function Disclosure({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <details className="group rounded-control border border-line">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-control px-4 py-3 text-sm font-medium text-ink transition-colors hover:bg-subtle [&::-webkit-details-marker]:hidden">
-        {title}
-        <ChevronDown className="shrink-0 text-muted transition-transform group-open:rotate-180" size={16} aria-hidden="true" />
-      </summary>
-      <div className="border-t border-line p-4">{children}</div>
-    </details>
   );
 }
 
@@ -189,18 +135,21 @@ function Refusal({
   examples: string[];
   onAsk: (question: string) => void;
 }) {
-  const options = response.supported?.length ? response.supported : examples;
+  const options = (response.supported?.length ? response.supported : examples).slice(0, 3);
   return (
     <Card className="p-5 sm:p-6">
       <div className="flex gap-3">
         <AlertCircle className="mt-0.5 shrink-0 text-amber-600" size={20} aria-hidden="true" />
-        <div className="min-w-0">
-          <h2 className="text-base font-bold text-ink">I can't answer that yet</h2>
-          <p className="mt-1 text-sm leading-relaxed text-body">{response.error ?? response.interpretation.reasoning}</p>
+        <div className="min-w-0 space-y-2">
+          <h2 className="text-base font-bold text-ink">I can't answer that</h2>
+          <p className="text-sm leading-relaxed text-body">{response.error ?? response.interpretation.reasoning}</p>
+          <p className="text-sm leading-relaxed text-muted">
+            I can answer counts, rates, delivery time, revenue and units by carrier, region, warehouse, city, category, SKU, status or
+            client — over days, weeks or months — and demand forecasts.
+          </p>
         </div>
       </div>
-      <p className="mt-6 text-sm font-bold text-ink">Try one of these</p>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap gap-2">
         {options.map((q) => (
           <Chip key={q} onClick={() => onAsk(q)}>
             {q}

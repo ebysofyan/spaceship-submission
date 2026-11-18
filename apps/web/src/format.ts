@@ -62,4 +62,4 @@ const TOOL_LABELS: Record<Interpretation["tool"], string> = {
 };
 export const toolLabel = (tool: Interpretation["tool"]) => TOOL_LABELS[tool];
 
-export const sourceLabel = (source: "llm" | "rules") => (source === "llm" ? "LLM" : "Rules");
+export const sourceLabel = (source: "llm" | "rules") => (source === "llm" ? "AI" : "Keyword matching");

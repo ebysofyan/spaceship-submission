@@ -46,6 +46,7 @@ export function ResultTable({ result }: { result: QueryResult }) {
 
 export function OrdersTable({ orders }: { orders: Order[] }) {
   return (
+    <div className="max-h-96 overflow-y-auto">
     <Shell>
       <thead>
         <tr>
@@ -72,6 +73,7 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
         ))}
       </tbody>
     </Shell>
+    </div>
   );
 }
 

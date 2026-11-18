@@ -79,14 +79,14 @@ function AiModeBadge({ health }: { health: AsyncState<Health> }) {
   if (health.data.aiMode === "llm") {
     return (
       <Badge tone="accent" title="Questions are interpreted by an LLM">
-        LLM
+        AI
       </Badge>
     );
   }
   if (health.data.aiMode === "rules") {
     return (
       <Badge tone="accent" title="Questions are interpreted by deterministic rules">
-        Rules
+        Keyword mode
       </Badge>
     );
   }
