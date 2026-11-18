@@ -104,7 +104,7 @@ $ curl -s -X POST localhost:3413/api/ask -H 'content-type: application/json' \
     -d '{"question":"Show delayed orders by week for the last 3 months"}' | jq ...
 tool: query   source: rules
 args: {"metric":"delayed_count","timeGrain":"week","dateRange":{"last":3,"unit":"month"}}
-answer: "Delayed orders by week: overall 9. Peak week 2025-10-06 at 2. Range: 2025-09-01 to 2025-11-30."
+answer: "9 delayed orders from 1 Sep – 30 Nov 2025. The busiest week (starting 6 Oct) had 2."
 chart: {"type":"line","xLabel":"week","yLabel":"Delayed orders"}
 resolvedRange: {"from":"2025-09-01","to":"2025-11-30"}   matchedOrders: 68
 rows (first 3): 2025-09-01 → 1, 2025-09-08 → 0, 2025-09-15 → 1   (zero-filled buckets present)
@@ -115,7 +115,7 @@ rows (first 3): 2025-09-01 → 1, 2025-09-08 → 0, 2025-09-15 → 1   (zero-fil
 ```
 tool: query   source: rules
 args: {"metric":"delay_rate","groupBy":"carrier","sort":"desc"}
-answer: "GLS has the highest delay rate at 37.5% (3 of 8 orders). Among groups with a base of 20+, USPS is the highest at 25.5% (12 of 47 orders)."
+answer: "GLS has the highest delay rate at 37.5% in 2025, but on only 8 orders. Among carriers with 20+ orders, USPS is highest at 25.5% (12 of 47)."
 chart: {"type":"bar","xLabel":"carrier","yLabel":"Delay rate"}
 rows (first 3): GLS 0.375 base 8 | USPS 0.2553 base 47 | UPS 0.2436 base 78
 notes: ["GLS: small base (8 orders)", "DPD: small base (18 orders)"]
@@ -128,12 +128,12 @@ Matches `docs/dataset.md` (GLS 37.5% base 8; USPS 25.5% base 47; UPS 24.4% base 
 ```
 tool: query   source: rules
 args: {"metric":"delayed_count","dateRange":{"last":1,"unit":"month"}}
-answer: "Delayed orders: 4. Range: 2025-11-01 to 2025-11-30."
+answer: "4 orders were delayed in November 2025."
 chart: {"type":"kpi"}     matchedOrders: 24
 ```
 
 Extra example from the rules router: `"What is the on-time rate by region?"` → `on_time_rate`, `groupBy: region`,
-bar chart; answer "US-W has the highest on-time rate at 86.4% (76 of 88 orders)."
+bar chart; answer "US-W has the highest on-time rate at 86.4% in 2025, on 88 orders."
 
 ---
 
