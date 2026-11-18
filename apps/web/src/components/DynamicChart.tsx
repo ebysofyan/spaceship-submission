@@ -20,7 +20,7 @@ export function DynamicChart({ result, height = 260 }: { result: QueryResult; he
 
   if (chart.type === "kpi") {
     return (
-      <div className="py-6">
+      <div className="py-2">
         <p className="text-5xl font-semibold tracking-tight tabular-nums">{result.value == null ? "—" : fmt(result.value)}</p>
         <p className="mt-2 text-sm text-zinc-500">
           {metricLabel}
@@ -58,7 +58,7 @@ export function DynamicChart({ result, height = 260 }: { result: QueryResult; he
           <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" minTickGap={16} />
           <YAxis {...axisProps} width={56} tickFormatter={axisFmt} />
           <Tooltip contentStyle={TOOLTIP_STYLE} formatter={tipValue} />
-          <Area type="monotone" dataKey="value" name={metricLabel} stroke={CHART.accent} strokeWidth={2} fill={`url(#${gradientId})`} />
+          <Area type="linear" dataKey="value" name={metricLabel} stroke={CHART.accent} strokeWidth={2} fill={`url(#${gradientId})`} />
         </AreaChart>
       </ResponsiveContainer>
     );

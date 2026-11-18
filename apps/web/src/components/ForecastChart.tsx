@@ -10,8 +10,9 @@ export function ForecastChart({ result, height = 300 }: { result: ForecastResult
     ...result.history.map((h) => ({
       label: formatKey(h.month),
       actual: h.units,
-      forecast: h.month === lastActual ? h.units : null, // joins the dashed line to history
-      band: null,
+      // The last actual point also starts the dashed line and the band (zero-width there), so the band meets the divider.
+      forecast: h.month === lastActual ? h.units : null,
+      band: h.month === lastActual ? [h.units, h.units] : null,
     })),
     ...result.forecast.map((f) => ({
       label: formatKey(f.month),

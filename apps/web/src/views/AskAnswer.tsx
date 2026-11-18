@@ -60,7 +60,7 @@ export function AnswerCard({
             </Disclosure>
           )}
           {query && (
-            <Disclosure title={`Underlying orders (${formatInt(query.matchedOrders)} matched, showing first ${query.sampleOrders.length})`}>
+            <Disclosure title={`Orders in scope (${formatInt(query.matchedOrders)} after filters and date range, showing first ${query.sampleOrders.length})`}>
               <OrdersTable orders={query.sampleOrders} />
             </Disclosure>
           )}
@@ -69,6 +69,11 @@ export function AnswerCard({
     </Card>
   );
 }
+
+const SOURCE_TITLE: Record<"llm" | "rules", string> = {
+  llm: "Interpreted by an LLM",
+  rules: "Deterministic keyword interpreter - set AI_API_KEY to enable LLM interpretation",
+};
 
 function Computation({
   reasoning,
@@ -94,7 +99,9 @@ function Computation({
           <Badge>{toolLabel(tool)}</Badge>
         </Field>
         <Field label="Source">
-          <Badge tone={source === "llm" ? "accent" : "neutral"}>{sourceLabel(source)}</Badge>
+          <Badge tone={source === "llm" ? "accent" : "neutral"} title={SOURCE_TITLE[source]}>
+            {sourceLabel(source)}
+          </Badge>
         </Field>
         <Field label="Reasoning">{reasoning}</Field>
 
