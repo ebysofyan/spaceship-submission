@@ -1,4 +1,4 @@
-// Used for the app nav and for segmented choices in the forecast controls.
+// Pills for the app nav and for segmented choices in the forecast controls.
 export function Tabs<T extends string>({
   label,
   value,
@@ -11,7 +11,7 @@ export function Tabs<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div role="tablist" aria-label={label} className="inline-flex rounded-lg bg-zinc-100 p-1">
+    <div role="tablist" aria-label={label} className="inline-flex flex-wrap gap-1">
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -21,8 +21,8 @@ export function Tabs<T extends string>({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(o.value)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-              active ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-900"
+            className={`h-9 rounded-full px-3.5 text-sm font-medium transition-colors ${
+              active ? "bg-brand-50 text-ink ring-1 ring-inset ring-brand-700" : "text-body hover:bg-subtle hover:text-ink"
             }`}
           >
             {o.label}

@@ -3,7 +3,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import type { DashboardResponse, Kpis, MetaResponse, Metric } from "@app/core";
 import { getDashboard } from "../api";
 import { useAsync } from "../hooks";
-import { AXIS_TICK, CHART, TOOLTIP_STYLE } from "../components/chartTheme";
+import { AXIS_TICK, CHART, LEGEND_LABEL, TOOLTIP_STYLE } from "../components/chartTheme";
 import { DynamicChart } from "../components/DynamicChart";
 import { Card, CardHeader } from "../components/ui/Card";
 import { InfoHint } from "../components/ui/InfoHint";
@@ -61,11 +61,11 @@ function KpiGrid({ kpis, meta }: { kpis: Kpis; meta: MetaResponse }) {
       {items.map((k, i) => (
         <Card key={k.label} className={`p-4 sm:p-5 ${i === items.length - 1 ? "col-span-2 lg:col-span-1" : ""}`}>
           <div className="flex items-center justify-between gap-2">
-            <p className="text-sm text-zinc-500">{k.label}</p>
+            <p className="text-sm text-muted">{k.label}</p>
             <InfoHint label={k.label} text={definition(k.metric)} />
           </div>
-          <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl">{k.value}</p>
-          <p className="mt-1 text-xs text-zinc-500">{k.sub}</p>
+          <p className="mt-2 text-2xl font-bold tracking-display tabular-nums text-ink sm:text-3xl">{k.value}</p>
+          <p className="mt-1 text-xs text-muted">{k.sub}</p>
         </Card>
       ))}
     </div>
@@ -104,8 +104,8 @@ function DeliveryChart({ rows }: { rows: DashboardResponse["deliveryPerformanceB
         <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" minTickGap={16} />
         <YAxis {...axisProps} width={40} allowDecimals={false} />
         <Tooltip cursor={{ fill: CHART.hover }} contentStyle={TOOLTIP_STYLE} />
-        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="onTime" name="On time" stackId="delivery" fill={CHART.accent} maxBarSize={36} />
+        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} labelStyle={LEGEND_LABEL} />
+        <Bar dataKey="onTime" name="On time" stackId="delivery" fill={CHART.bar} stroke={CHART.barEdge} maxBarSize={36} />
         <Bar dataKey="delayed" name="Delayed" stackId="delivery" fill={CHART.delayed} maxBarSize={36} />
         <Bar dataKey="exception" name="Exception" stackId="delivery" fill={CHART.exception} radius={[4, 4, 0, 0]} maxBarSize={36} />
       </BarChart>
@@ -119,12 +119,12 @@ function DashboardSkeleton() {
       <span className="sr-only">Loading dashboard…</span>
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         {Array.from({ length: 5 }, (_, i) => (
-          <Skeleton key={i} className="h-28 rounded-xl" />
+          <Skeleton key={i} className="h-28 rounded-card" />
         ))}
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         {Array.from({ length: 4 }, (_, i) => (
-          <Skeleton key={i} className="h-80 rounded-xl" />
+          <Skeleton key={i} className="h-80 rounded-card" />
         ))}
       </div>
     </div>

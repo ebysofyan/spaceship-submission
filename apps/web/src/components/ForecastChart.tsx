@@ -1,7 +1,7 @@
 import { Area, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { ForecastResult } from "@app/core";
 import { formatInt, formatKey } from "../format";
-import { AXIS_TICK, CHART, TOOLTIP_STYLE } from "./chartTheme";
+import { AXIS_TICK, CHART, LEGEND_LABEL, TOOLTIP_STYLE } from "./chartTheme";
 
 // History solid, forecast dashed, shaded lower–upper band, divider at the last actual month.
 export function ForecastChart({ result, height = 300 }: { result: ForecastResult; height?: number }) {
@@ -33,11 +33,11 @@ export function ForecastChart({ result, height = 300 }: { result: ForecastResult
           contentStyle={TOOLTIP_STYLE}
           formatter={(v: unknown) => (Array.isArray(v) ? `${formatInt(v[0])}–${formatInt(v[1])} units` : `${formatInt(Number(v))} units`)}
         />
-        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} labelStyle={LEGEND_LABEL} />
         {lastActual && <ReferenceLine x={formatKey(lastActual)} stroke={CHART.muted} strokeDasharray="3 3" />}
-        <Area dataKey="band" name="Forecast range" stroke="none" fill={CHART.band} fillOpacity={0.5} legendType="rect" />
-        <Line dataKey="actual" name="History" stroke={CHART.ink} strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
-        <Line dataKey="forecast" name="Forecast" stroke={CHART.accent} strokeWidth={2} strokeDasharray="6 4" dot={{ r: 3 }} connectNulls={false} />
+        <Area dataKey="band" name="Forecast range" stroke="none" fill={CHART.band} fillOpacity={0.25} legendType="rect" />
+        <Line dataKey="actual" name="History" stroke={CHART.history} strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+        <Line dataKey="forecast" name="Forecast" stroke={CHART.forecast} strokeWidth={2} strokeDasharray="6 4" dot={{ r: 3 }} connectNulls={false} />
       </ComposedChart>
     </ResponsiveContainer>
   );

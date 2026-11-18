@@ -22,30 +22,31 @@ export function App() {
   const health = useAsync(getHealth, []);
 
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900 antialiased">
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+    <div className="min-h-screen bg-surface text-body antialiased">
+      {/* One 64px row on sm+; below sm the tabs wrap onto a second row. */}
+      <header className="sticky top-0 z-10 border-b border-line bg-surface">
+        <div className="mx-auto flex max-w-[1160px] flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3 sm:h-16 sm:flex-nowrap sm:px-8 sm:py-0 lg:px-16">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
-              <Truck size={18} aria-hidden="true" />
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-control bg-ink text-white">
+              <Truck size={16} aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold leading-tight">Logistics Analytics</h1>
-              <p className="truncate text-xs text-zinc-500 tabular-nums">{datasetLabel(meta.data)}</p>
+              <h1 className="truncate text-base leading-tight">Logistics Analytics</h1>
+              <p className="truncate text-xs text-muted tabular-nums">{datasetLabel(meta.data)}</p>
             </div>
           </div>
+          <nav className="order-last w-full sm:order-none sm:w-auto">
+            <Tabs label="Sections" value={tab} options={TABS} onChange={setTab} />
+          </nav>
           <AiModeBadge health={health} />
         </div>
-        <nav className="mx-auto max-w-7xl px-4 pb-3 sm:px-6">
-          <Tabs label="Sections" value={tab} options={TABS} onChange={setTab} />
-        </nav>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+      <main className="mx-auto max-w-[1160px] px-4 py-8 sm:px-8 lg:px-16">
         {meta.error ? (
           <ErrorState message={meta.error} onRetry={meta.retry} />
         ) : !meta.data ? (
-          <Skeleton className="h-96 w-full rounded-xl" />
+          <Skeleton className="h-96 w-full rounded-card" />
         ) : (
           // Kept mounted when hidden so the question history and forecast controls survive tab switches.
           <>
@@ -83,7 +84,11 @@ function AiModeBadge({ health }: { health: AsyncState<Health> }) {
     );
   }
   if (health.data.aiMode === "rules") {
-    return <Badge title="Questions are interpreted by deterministic rules">Rules</Badge>;
+    return (
+      <Badge tone="accent" title="Questions are interpreted by deterministic rules">
+        Rules
+      </Badge>
+    );
   }
   return <Badge>Unknown</Badge>;
 }

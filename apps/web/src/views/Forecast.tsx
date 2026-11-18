@@ -42,10 +42,10 @@ export function Forecast({ meta }: { meta: MetaResponse }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
-      <Card className="p-5 lg:sticky lg:top-6">
+      <Card className="p-5 lg:sticky lg:top-24">
         <div className="space-y-5">
           <div>
-            <p className="mb-2 text-xs font-medium text-zinc-600">Target</p>
+            <p className="mb-2 text-xs font-medium text-body">Target</p>
             <Tabs label="Forecast target" value={kind} options={KINDS} onChange={setKind} />
           </div>
 
@@ -89,7 +89,7 @@ export function Forecast({ meta }: { meta: MetaResponse }) {
               step={1}
               value={horizon}
               onChange={(e) => setHorizon(Number(e.target.value))}
-              className="w-full accent-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="w-full accent-brand-700"
             />
           </Field>
 
@@ -111,7 +111,7 @@ export function Forecast({ meta }: { meta: MetaResponse }) {
         ) : result.error ? (
           <ErrorState message={result.error} onRetry={result.retry} />
         ) : !result.data ? (
-          <Skeleton className="h-96 w-full rounded-xl" />
+          <Skeleton className="h-96 w-full rounded-card" />
         ) : (
           <ForecastResults result={result.data} busy={result.loading} />
         )}
@@ -123,9 +123,9 @@ export function Forecast({ meta }: { meta: MetaResponse }) {
 function Field({ id, label, hint, children }: { id: string; label: string; hint?: string; children: ReactNode }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-2 flex items-baseline justify-between gap-2 text-xs font-medium text-zinc-600">
+      <label htmlFor={id} className="mb-2 flex items-baseline justify-between gap-2 text-xs font-medium text-body">
         {label}
-        {hint && <span className="font-normal text-zinc-500">{hint}</span>}
+        {hint && <span className="font-normal text-muted">{hint}</span>}
       </label>
       {children}
     </div>
@@ -155,36 +155,36 @@ function ForecastResults({ result, busy }: { result: ForecastResult; busy: boole
             description={`Horizon ${spec.horizonMonths} months · ${Math.round((spec.serviceLevel ?? 0.95) * 100)}% service level`}
           />
           <div className="p-5">
-            <p className="text-4xl font-semibold tracking-tight tabular-nums">
+            <p className="text-4xl font-bold tracking-display tabular-nums text-ink">
               {formatInt(rec.recommendedInventory)}
-              <span className="ml-2 text-base font-normal text-zinc-500">units</span>
+              <span className="ml-2 text-base font-normal text-muted">units</span>
             </p>
             <dl className="mt-5 grid grid-cols-2 gap-4 text-sm">
               <div>
-                <dt className="text-zinc-500">Forecast demand</dt>
-                <dd className="mt-0.5 font-medium tabular-nums">{formatInt(rec.forecastUnits)} units</dd>
+                <dt className="text-muted">Forecast demand</dt>
+                <dd className="mt-0.5 font-medium tabular-nums text-ink">{formatInt(rec.forecastUnits)} units</dd>
               </div>
               <div>
-                <dt className="text-zinc-500">Safety stock</dt>
-                <dd className="mt-0.5 font-medium tabular-nums">{formatInt(rec.safetyStock)} units</dd>
+                <dt className="text-muted">Safety stock</dt>
+                <dd className="mt-0.5 font-medium tabular-nums text-ink">{formatInt(rec.safetyStock)} units</dd>
               </div>
             </dl>
-            <p className="mt-5 text-sm leading-relaxed text-zinc-600">{rec.explanation}</p>
+            <p className="mt-5 text-sm leading-relaxed text-body">{rec.explanation}</p>
           </div>
         </Card>
 
         <Card>
           <CardHeader title="Method comparison" description="Holdout MAE over the last 3 months; lowest error wins" />
-          <ul className="divide-y divide-zinc-100">
+          <ul className="divide-y divide-line">
             {result.methodsCompared.map((m) => {
               const chosen = m.method === result.method;
               return (
-                <li key={m.method} className={`flex items-center justify-between gap-3 px-5 py-3 text-sm ${chosen ? "bg-indigo-50/60" : ""}`}>
-                  <span className="flex flex-wrap items-center gap-2 text-zinc-800">
+                <li key={m.method} className={`flex items-center justify-between gap-3 px-5 py-3 text-sm ${chosen ? "bg-brand-50" : ""}`}>
+                  <span className="flex flex-wrap items-center gap-2 text-ink">
                     {methodLabel(m.method)}
                     {chosen && <Badge tone="accent">Selected</Badge>}
                   </span>
-                  <span className="whitespace-nowrap tabular-nums text-zinc-600">MAE {m.mae.toFixed(1)}</span>
+                  <span className="whitespace-nowrap tabular-nums text-body">MAE {m.mae.toFixed(1)}</span>
                 </li>
               );
             })}
@@ -201,7 +201,7 @@ function ForecastResults({ result, busy }: { result: ForecastResult; busy: boole
 
       <Card>
         <CardHeader title="Methodology" />
-        <p className="p-5 text-sm leading-relaxed text-zinc-600">{result.methodology}</p>
+        <p className="p-5 text-sm leading-relaxed text-body">{result.methodology}</p>
       </Card>
     </div>
   );

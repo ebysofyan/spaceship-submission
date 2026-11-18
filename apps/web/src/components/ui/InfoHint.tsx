@@ -7,7 +7,7 @@ export function InfoHint({ label, text }: { label: string; text: string }) {
       type="button"
       title={text}
       aria-label={`${label}: ${text}`}
-      className="shrink-0 rounded-full text-zinc-400 transition-colors hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+      className="shrink-0 rounded-full text-muted transition-colors hover:text-ink"
     >
       <Info size={14} aria-hidden="true" />
     </button>

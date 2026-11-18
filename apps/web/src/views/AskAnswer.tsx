@@ -28,8 +28,8 @@ export function AnswerCard({
     <Card className="p-5 sm:p-6">
       <div className="space-y-6">
         <div>
-          <p className="text-sm text-zinc-500">{response.question}</p>
-          <p className="mt-2 text-lg leading-relaxed text-zinc-900 sm:text-xl">{response.answer}</p>
+          <p className="text-sm text-muted">{response.question}</p>
+          <p className="mt-2 text-lg leading-relaxed text-ink sm:text-xl">{response.answer}</p>
         </div>
 
         {query && <DynamicChart result={query} />}
@@ -45,7 +45,7 @@ export function AnswerCard({
 
         <div className="space-y-3">
           <Disclosure title="Structured query (JSON)">
-            <pre className="overflow-x-auto rounded-lg bg-zinc-950 p-4 text-xs leading-relaxed text-zinc-100">
+            <pre className="overflow-x-auto rounded-control bg-dark-0 p-4 text-xs leading-relaxed text-white">
               {JSON.stringify(interpretation.args, null, 2)}
             </pre>
           </Disclosure>
@@ -90,8 +90,8 @@ function Computation({
 }) {
   const notes = [...(query?.notes ?? []), ...(forecast?.warnings ?? [])];
   return (
-    <section aria-labelledby="how-computed" className="rounded-xl bg-zinc-50 p-4 sm:p-5">
-      <h3 id="how-computed" className="text-sm font-semibold text-zinc-900">
+    <section aria-labelledby="how-computed" className="rounded-card border border-line bg-surface p-4 sm:p-5">
+      <h3 id="how-computed" className="text-sm font-bold text-ink">
         How this was computed
       </h3>
       <dl className="mt-4 grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2">
@@ -108,7 +108,7 @@ function Computation({
         {query && (
           <Field label="Metric">
             {query.metricLabel}
-            <span className="mt-0.5 block text-xs text-zinc-500">{query.metricDefinition}</span>
+            <span className="mt-0.5 block text-xs text-muted">{query.metricDefinition}</span>
           </Field>
         )}
         {query && (
@@ -121,7 +121,7 @@ function Computation({
             <Field label="Target">{formatTarget(forecast.spec.target)}</Field>
             <Field label="Model">
               {methodLabel(forecast.method)}
-              <span className="mt-0.5 block text-xs text-zinc-500">
+              <span className="mt-0.5 block text-xs text-muted">
                 {forecast.spec.horizonMonths} months ahead · demand in units per month
               </span>
             </Field>
@@ -162,20 +162,20 @@ function FilterList({ filters }: { filters: QuerySpec["filters"] }) {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="text-xs font-medium text-zinc-500">{label}</dt>
-      <dd className="mt-1 text-zinc-800">{children}</dd>
+      <dt className="text-xs font-medium text-muted">{label}</dt>
+      <dd className="mt-1 text-ink">{children}</dd>
     </div>
   );
 }
 
 function Disclosure({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <details className="group rounded-lg border border-zinc-200">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm font-medium text-zinc-700 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 [&::-webkit-details-marker]:hidden">
+    <details className="group rounded-control border border-line">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-control px-4 py-3 text-sm font-medium text-ink transition-colors hover:bg-subtle [&::-webkit-details-marker]:hidden">
         {title}
-        <ChevronDown className="shrink-0 text-zinc-400 transition-transform group-open:rotate-180" size={16} aria-hidden="true" />
+        <ChevronDown className="shrink-0 text-muted transition-transform group-open:rotate-180" size={16} aria-hidden="true" />
       </summary>
-      <div className="border-t border-zinc-200 p-4">{children}</div>
+      <div className="border-t border-line p-4">{children}</div>
     </details>
   );
 }
@@ -195,11 +195,11 @@ function Refusal({
       <div className="flex gap-3">
         <AlertCircle className="mt-0.5 shrink-0 text-amber-600" size={20} aria-hidden="true" />
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-zinc-900">I can't answer that yet</h2>
-          <p className="mt-1 text-sm leading-relaxed text-zinc-600">{response.error ?? response.interpretation.reasoning}</p>
+          <h2 className="text-base font-bold text-ink">I can't answer that yet</h2>
+          <p className="mt-1 text-sm leading-relaxed text-body">{response.error ?? response.interpretation.reasoning}</p>
         </div>
       </div>
-      <p className="mt-6 text-sm font-medium text-zinc-900">Try one of these</p>
+      <p className="mt-6 text-sm font-bold text-ink">Try one of these</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {options.map((q) => (
           <Chip key={q} onClick={() => onAsk(q)}>

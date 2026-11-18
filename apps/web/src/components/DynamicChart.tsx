@@ -21,8 +21,8 @@ export function DynamicChart({ result, height = 260 }: { result: QueryResult; he
   if (chart.type === "kpi") {
     return (
       <div className="py-2">
-        <p className="text-5xl font-semibold tracking-tight tabular-nums">{result.value == null ? "—" : fmt(result.value)}</p>
-        <p className="mt-2 text-sm text-zinc-500">
+        <p className="text-5xl font-bold tracking-display tabular-nums text-ink">{result.value == null ? "—" : fmt(result.value)}</p>
+        <p className="mt-2 text-sm text-muted">
           {metricLabel}
           {base != null && ` · base ${formatInt(base)} orders`}
         </p>
@@ -50,15 +50,15 @@ export function DynamicChart({ result, height = 260 }: { result: QueryResult; he
         <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={CHART.accent} stopOpacity={0.2} />
-              <stop offset="100%" stopColor={CHART.accent} stopOpacity={0} />
+              <stop offset="0%" stopColor={CHART.bar} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={CHART.bar} stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid vertical={false} stroke={CHART.grid} />
           <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" minTickGap={16} />
           <YAxis {...axisProps} width={56} tickFormatter={axisFmt} />
           <Tooltip contentStyle={TOOLTIP_STYLE} formatter={tipValue} />
-          <Area type="linear" dataKey="value" name={metricLabel} stroke={CHART.accent} strokeWidth={2} fill={`url(#${gradientId})`} />
+          <Area type="linear" dataKey="value" name={metricLabel} stroke={CHART.line} strokeWidth={2} fill={`url(#${gradientId})`} />
         </AreaChart>
       </ResponsiveContainer>
     );
@@ -72,7 +72,7 @@ export function DynamicChart({ result, height = 260 }: { result: QueryResult; he
           <XAxis dataKey="label" {...axisProps} interval={0} />
           <YAxis {...axisProps} width={56} tickFormatter={axisFmt} />
           <Tooltip cursor={{ fill: CHART.hover }} contentStyle={TOOLTIP_STYLE} formatter={tipValue} />
-          <Bar dataKey="value" name={metricLabel} fill={CHART.accent} radius={[4, 4, 0, 0]} maxBarSize={48} />
+          <Bar dataKey="value" name={metricLabel} fill={CHART.bar} stroke={CHART.barEdge} radius={[4, 4, 0, 0]} maxBarSize={48} />
         </BarChart>
       </ResponsiveContainer>
     );
@@ -85,7 +85,7 @@ export function DynamicChart({ result, height = 260 }: { result: QueryResult; he
         <XAxis type="number" {...axisProps} tickFormatter={axisFmt} domain={[0, rateTop ?? "auto"]} ticks={rateTicks} />
         <YAxis type="category" dataKey="label" {...axisProps} width={96} interval={0} />
         <Tooltip cursor={{ fill: CHART.hover }} contentStyle={TOOLTIP_STYLE} formatter={tipValue} />
-        <Bar dataKey="value" name={metricLabel} fill={CHART.accent} radius={[0, 4, 4, 0]} barSize={18}>
+        <Bar dataKey="value" name={metricLabel} fill={CHART.bar} stroke={CHART.barEdge} radius={[0, 4, 4, 0]} barSize={18}>
           <LabelList dataKey="text" position="right" fill={CHART.muted} fontSize={12} />
         </Bar>
       </BarChart>

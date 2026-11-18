@@ -3,19 +3,20 @@ import type { ButtonHTMLAttributes } from "react";
 type Variant = "primary" | "outline" | "ghost";
 type Size = "md" | "sm" | "icon";
 
+// Black label on brand green: white on #17F082 fails contrast (1.5:1).
 const BASE =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-control font-bold transition-colors disabled:pointer-events-none disabled:opacity-50";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-indigo-600 text-white hover:bg-indigo-700",
-  outline: "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50",
-  ghost: "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900",
+  primary: "bg-brand-500 text-ink hover:bg-brand-600",
+  outline: "border border-line bg-transparent text-ink hover:bg-subtle",
+  ghost: "bg-transparent text-body hover:bg-subtle hover:text-ink",
 };
 
 const SIZES: Record<Size, string> = {
   md: "h-10 px-4 text-sm",
-  sm: "h-8 px-3 text-xs",
-  icon: "size-8",
+  sm: "h-9 px-3 text-sm",
+  icon: "size-9",
 };
 
 export function Button({
@@ -33,7 +34,7 @@ export function Chip(props: ButtonHTMLAttributes<HTMLButtonElement>) {
     <button
       type="button"
       {...props}
-      className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-left text-xs text-zinc-700 transition-colors hover:border-indigo-300 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-50"
+      className="rounded-full border border-line bg-surface px-3 py-1.5 text-left text-sm text-body transition-colors hover:bg-subtle hover:text-ink disabled:opacity-50"
     />
   );
 }

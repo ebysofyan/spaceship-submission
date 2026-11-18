@@ -2,9 +2,10 @@ import type { HTMLAttributes } from "react";
 
 type Tone = "neutral" | "accent" | "warn";
 
+// accent = brand badge (#E8FAF0 on #07713B text); used for the LLM/Rules mode.
 const TONES: Record<Tone, string> = {
-  neutral: "bg-zinc-100 text-zinc-700",
-  accent: "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200",
+  neutral: "bg-subtle text-body",
+  accent: "bg-brand-50 text-brand-700",
   warn: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200",
 };
 
@@ -12,7 +13,7 @@ export function Badge({ tone = "neutral", className = "", ...props }: HTMLAttrib
   return (
     <span
       {...props}
-      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-medium ${TONES[tone]} ${className}`}
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold ${TONES[tone]} ${className}`}
     />
   );
 }

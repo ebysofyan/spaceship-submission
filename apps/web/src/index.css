@@ -1,16 +1,73 @@
 @import "tailwindcss";
 
+/* Spaceship brand tokens (docs/theme.md §5). Inter Tight substitutes for ABC Favorit. */
 @theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Inter Tight Variable", "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-50: #e8faf0;
+  --color-brand-500: #17f082; /* fills only, with black label */
+  --color-brand-600: #06e078; /* primary hover */
+  --color-brand-700: #07713b; /* green text on white, table headers */
+  --color-mint: #5aef77;
+  --color-cyan: #3ae8f6;
+  --color-sky: #00acfc;
+  --color-link: #0273d3;
+
+  --color-surface: #ffffff;
+  --color-subtle: #f6f6f7;
+  --color-band: #f5f6fa;
+  --color-line: #dbdbdb;
+
+  --color-ink: #000000;
+  --color-body: #454545;
+  --color-muted: #6d737f;
+  --color-faint: #999999;
+
+  --color-dark-0: #1a1a1a;
+  --color-dark-1: #292a2e;
+
+  /* Status colours: kept out of the brand slots. */
+  --color-danger: #e5484d;
+  --color-danger-50: #fdf1f1;
+  --color-warm: #c97700; /* exception: 3.4:1 on white */
+
+  --radius-control: 8px;
+  --radius-card: 20px;
+  --shadow-float: 0 8px 32px rgb(0 0 0 / 0.12);
+  --tracking-display: -0.02em;
 }
 
-html {
-  color-scheme: light;
-}
+@layer base {
+  html {
+    color-scheme: light;
+  }
 
-::selection {
-  background-color: #c7d2fe; /* indigo-200 */
-  color: #18181b;
+  body {
+    color: var(--color-body);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--color-ink);
+  }
+
+  a {
+    color: var(--color-link);
+    text-decoration: underline;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-link);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-brand-500);
+    color: var(--color-ink);
+  }
 }
 
 /* Chart labels: digits line up in columns, as in the tables. */

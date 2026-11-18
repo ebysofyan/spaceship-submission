@@ -3,14 +3,15 @@ import type { ForecastResult, Order, QueryResult } from "@app/core";
 import { formatInt, formatKey, formatMetric, formatStatus } from "../format";
 import { EmptyState } from "./ui/States";
 
-const TH = "whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-zinc-500";
+// Header: deep brand green with white bold text (6:1). Headers may wrap so narrow phones fit without scrolling.
+const TH = "bg-brand-700 px-3 py-2.5 text-left text-sm font-bold text-white";
 const THR = `${TH} text-right`;
-const TD = "whitespace-nowrap px-3 py-2 text-zinc-700 tabular-nums";
+const TD = "whitespace-nowrap px-3 py-2.5 text-sm text-body tabular-nums";
 const TDR = `${TD} text-right`;
 
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-200">
+    <div className="overflow-x-auto rounded-control border border-line">
       <table className="w-full text-sm">{children}</table>
     </div>
   );
@@ -21,7 +22,7 @@ export function ResultTable({ result }: { result: QueryResult }) {
   if (rows.length === 0) return <EmptyState>No rows match this question.</EmptyState>;
   return (
     <Shell>
-      <thead className="bg-zinc-50">
+      <thead>
         <tr>
           <th className={TH}>{chart.xLabel ?? "Group"}</th>
           <th className={THR}>{metricLabel}</th>
@@ -29,7 +30,7 @@ export function ResultTable({ result }: { result: QueryResult }) {
           <th className={THR}>Base</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-zinc-100">
+      <tbody className="divide-y divide-line">
         {rows.map((r) => (
           <tr key={r.key}>
             <td className={TD}>{formatKey(r.key)}</td>
@@ -46,7 +47,7 @@ export function ResultTable({ result }: { result: QueryResult }) {
 export function OrdersTable({ orders }: { orders: Order[] }) {
   return (
     <Shell>
-      <thead className="bg-zinc-50">
+      <thead>
         <tr>
           <th className={TH}>Order</th>
           <th className={TH}>Order date</th>
@@ -57,7 +58,7 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
           <th className={TH}>Region</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-zinc-100">
+      <tbody className="divide-y divide-line">
         {orders.map((o) => (
           <tr key={o.order_id}>
             <td className={TD}>{o.order_id}</td>
@@ -77,14 +78,14 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
 export function ForecastTable({ result }: { result: ForecastResult }) {
   return (
     <Shell>
-      <thead className="bg-zinc-50">
+      <thead>
         <tr>
           <th className={TH}>Month</th>
           <th className={THR}>Forecast units</th>
           <th className={THR}>Range (low–high)</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-zinc-100">
+      <tbody className="divide-y divide-line">
         {result.forecast.map((f) => (
           <tr key={f.month}>
             <td className={TD}>{formatKey(f.month)}</td>

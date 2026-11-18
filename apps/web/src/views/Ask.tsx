@@ -53,16 +53,16 @@ export function Ask({ meta }: { meta: MetaResponse }) {
         <section className="space-y-3">
           <form onSubmit={onSubmit} className="flex gap-2">
             <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} aria-hidden="true" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} aria-hidden="true" />
               <Input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Ask about orders, carriers, delays or demand"
                 aria-label="Ask a question"
-                className="h-12 pl-11 text-base"
+                className="pl-9"
               />
             </div>
-            <Button type="submit" className="h-12 px-5" disabled={pending || !draft.trim()}>
+            <Button type="submit" disabled={pending || !draft.trim()}>
               {pending ? <Loader2 className="animate-spin" size={16} aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
               Ask
             </Button>
@@ -91,7 +91,7 @@ export function Ask({ meta }: { meta: MetaResponse }) {
         <Card>
           <CardHeader title="Session history" />
           {entries.length === 0 ? (
-            <p className="p-5 text-sm text-zinc-500">Questions you ask this session will be listed here.</p>
+            <p className="p-5 text-sm text-muted">Questions you ask this session will be listed here.</p>
           ) : (
             <ul className="max-h-[70vh] space-y-1 overflow-y-auto p-2">
               {entries.map(({ id, response }) => (
@@ -100,12 +100,12 @@ export function Ask({ meta }: { meta: MetaResponse }) {
                     type="button"
                     onClick={() => setSelectedId(id)}
                     aria-current={id === selectedId ? "true" : undefined}
-                    className={`w-full rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-                      id === selectedId ? "bg-indigo-50" : "hover:bg-zinc-50"
+                    className={`w-full rounded-control px-3 py-2.5 text-left transition-colors ${
+                      id === selectedId ? "bg-brand-50" : "hover:bg-subtle"
                     }`}
                   >
-                    <span className="line-clamp-2 block text-sm text-zinc-800">{response.question}</span>
-                    <span className="mt-1 block text-xs text-zinc-500">
+                    <span className="line-clamp-2 block text-sm text-ink">{response.question}</span>
+                    <span className="mt-1 block text-xs text-muted">
                       {toolLabel(response.interpretation.tool)} · {sourceLabel(response.interpretation.source)}
                     </span>
                   </button>
@@ -122,8 +122,8 @@ export function Ask({ meta }: { meta: MetaResponse }) {
 function Interpreting() {
   return (
     <Card className="p-5 sm:p-6">
-      <div role="status" className="flex items-center gap-3 text-sm text-zinc-600">
-        <Loader2 className="animate-spin text-indigo-600" size={18} aria-hidden="true" />
+      <div role="status" className="flex items-center gap-3 text-sm text-body">
+        <Loader2 className="animate-spin text-brand-700" size={18} aria-hidden="true" />
         Interpreting…
       </div>
       <div className="mt-5 space-y-3" aria-hidden="true">
