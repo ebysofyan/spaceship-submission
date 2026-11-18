@@ -1,0 +1,11 @@
+{
+  "name": "@app/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/server.ts",
+  "dependencies": {
+    "@app/core": "workspace:*",
+    "zod": "^4"
+  }
+}
