@@ -119,6 +119,11 @@ describe("rules router", () => {
     );
   });
 
+  test("range phrases echo in canonical case in the reasoning", () => {
+    expect(route("orders by region in Q1").reasoning).toBe("Matched “orders”, grouped by region, Q1.");
+    expect(route("orders in november").reasoning).toBe("Matched “orders”, November.");
+  });
+
   test("trend, over time and monthly mean a monthly series", () => {
     for (const q of ["revenue trend", "orders over time", "delayed orders per month", "monthly delayed orders"]) {
       expect(route(q)).toMatchObject({ tool: "query", args: { timeGrain: "month" } });

@@ -203,7 +203,7 @@ function detectRange(q: string, anchor: string): Hit<DateRange> | undefined {
     const end = start + 2;
     return {
       value: { from: `${year}-${pad(start)}-01`, to: `${year}-${pad(end)}-${pad(lastDay(year, end))}` },
-      match: quarter[0],
+      match: `Q${quarter[1]}`,
     };
   }
 
@@ -212,7 +212,7 @@ function detectRange(q: string, anchor: string): Hit<DateRange> | undefined {
     const m = MONTHS.indexOf(month[1]) + 1;
     return {
       value: { from: `${year}-${pad(m)}-01`, to: `${year}-${pad(m)}-${pad(lastDay(year, m))}` },
-      match: month[1],
+      match: month[1].charAt(0).toUpperCase() + month[1].slice(1),
     };
   }
   return undefined;

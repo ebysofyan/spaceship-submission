@@ -18,7 +18,7 @@ const query = (spec: QuerySpec) => answerQuery(runQuery(orders, spec), meta.date
 describe("answer templates", () => {
   test("carrier delay rate: the top group, its base, and the leader among bigger groups", () => {
     expect(say("Which carrier has the highest delay rate?")).toBe(
-      "GLS has the highest delay rate at 37.5%, but on only 8 orders. Among carriers with 20+ orders, USPS is highest at 25.5% (12 of 47).",
+      "GLS has the highest delay rate at 37.5% in 2025, but on only 8 orders. Among carriers with 20+ orders, USPS is highest at 25.5% (12 of 47).",
     );
   });
 
@@ -34,10 +34,23 @@ describe("answer templates", () => {
     );
   });
 
-  test("region order counts: top three, with the counts in brackets", () => {
+  test("region order counts: top three, with the counts in brackets and the period", () => {
     expect(say("How many orders by region?")).toBe(
-      "US-E has the most orders (95), followed by US-W (92) and EU (81).",
+      "US-E has the most orders (95) in 2025, followed by US-W (92) and EU (81).",
     );
+  });
+
+  test("grouped counts in a quarter use the same range phrase as scalars", () => {
+    expect(say("orders by region in Q1")).toBe(
+      "US-E has the most orders (42) from 1 Jan – 31 Mar 2025, followed by US-W (39) and US-C (31).",
+    );
+  });
+
+  test("compare names every compared value, in rank order", () => {
+    expect(say("compare UPS and FedEx on-time rate")).toBe(
+      "FedEx 85.9% (85 orders) vs UPS 75.6% (78 orders) on-time rate in 2025.",
+    );
+    expect(say("EU vs UK orders")).toBe("EU 81 vs UK 54 orders in 2025.");
   });
 
   test("PAINT forecast: units over the horizon, then the plan with safety stock", () => {
@@ -60,13 +73,25 @@ describe("answer templates", () => {
 
   test("scalar average uses the delivery base, with the filter in the middle", () => {
     expect(say("average delivery time for DHL")).toBe(
-      "Average delivery time for DHL was 3.52 days across 58 delivered orders in 2025.",
+      "Average delivery time for DHL was 3.52 days across 58 completed deliveries in 2025.",
     );
   });
 
   test("scalar money is gross, with the note at the end", () => {
     expect(query({ metric: "revenue", filters: { carrier: ["DHL"] } })).toMatch(
       /^Revenue for DHL was \$[\d,]+\.\d{2} in 2025 \(gross, before promo discounts\)\.$/,
+    );
+  });
+
+  test("average delivery time caveat names completed deliveries and drops the 'of' count", () => {
+    expect(say("average delivery time by carrier")).toBe(
+      "GLS has the highest avg delivery days at 5.13 days in 2025, but on only 8 completed deliveries. Among carriers with 20+ completed deliveries, USPS is highest at 4.64 days.",
+    );
+  });
+
+  test("money series says highest, not busiest", () => {
+    expect(say("revenue trend")).toBe(
+      "$13,695.87 revenue (gross) in 2025. The highest month was January ($2,183.15).",
     );
   });
 
