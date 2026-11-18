@@ -3,3 +3,17 @@
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
+
+html {
+  color-scheme: light;
+}
+
+::selection {
+  background-color: #c7d2fe; /* indigo-200 */
+  color: #18181b;
+}
+
+/* Chart labels: digits line up in columns, as in the tables. */
+.recharts-text {
+  font-variant-numeric: tabular-nums;
+}
