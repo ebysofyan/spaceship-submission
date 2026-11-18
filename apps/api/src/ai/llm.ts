@@ -45,8 +45,14 @@ Dates: relative ranges are anchored to the last order date, ${meta.anchorDate}, 
 - "last 3 months" = {"last": 3, "unit": "month"}
 - Quarters and named months: explicit {"from", "to"} dates in ${meta.anchorDate.slice(0, 4)}.
 
+Query shape:
+- "top N" / "bottom N" -> limit N (bottom: sort "asc"). Plain "top" or "highest" with no number -> no limit.
+- "compare A and B", "A vs B": two or more values of one dimension -> groupBy that dimension and filter to those values.
+- "trend", "over time", "monthly" -> timeGrain "month", unless another grain is asked for.
+- "how is X doing", "X performance" with no measure -> metric on_time_rate, filtered to X.
+
 Use run_query for metric questions, run_forecast for demand, prediction or inventory planning, and refuse for anything else.
-Put one short sentence in "reasoning" on every call.`;
+Put one short plain-English sentence in "reasoning" on every call; it is shown to the user.`;
 }
 
 // Tool schemas come from the same zod schemas that validate the reply. Each tool also takes a `reasoning` string.

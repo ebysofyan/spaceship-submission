@@ -52,14 +52,14 @@ describe("http api", () => {
     const body = await jsonOf(await post("/api/ask", { question: "what's the weather" }));
     expect(body.interpretation.tool).toBe("unsupported");
     expect(body.supported.length).toBeGreaterThan(0);
-    expect(body.answer).toBe("I can't answer that from this dataset: no metric recognised; try orders, late/delayed orders, on-time rate, delay rate, delivery time, revenue, units or average order value.");
+    expect(body.answer).toBe("I can't answer that from this data. I couldn't tell which measure you mean.");
   });
 
-  test("rules mode is labelled as normal, not as an LLM failure, in the user-facing answer", async () => {
+  test("rules mode reasoning is plain English: no env var names, no interpreter prefix", async () => {
     const body = await jsonOf(await post("/api/ask", { question: "Which carrier has the highest delay rate?" }));
-    expect(body.interpretation.reasoning).toStartWith("Rules interpreter (no AI_API_KEY configured): ");
-    expect(body.answer).not.toContain("LLM");
-    expect(body.answer).not.toContain("used rules");
+    expect(body.interpretation.reasoning).toBe("Matched “delay rate”, grouped by carrier.");
+    expect(body.interpretation.reasoning).not.toContain("AI_API_KEY");
+    expect(body.answer).not.toContain("AI");
   });
 
   test("ask rejects empty and over-long questions with 400", async () => {
@@ -137,7 +137,7 @@ describe("LLM path", () => {
     );
     try {
       const ai = { apiKey: "test-key", baseUrl: `http://localhost:${srv.port}`, model: "test" };
-      const { interpretation: r } = await interpret("Which carrier has the highest delay rate?", { meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai });
+      const r = await interpret("Which carrier has the highest delay rate?", { meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai });
       expect(r).toMatchObject({ tool: "query", source: "llm", reasoning: "carrier ranking", args: { metric: "delay_rate", groupBy: "carrier" } });
     } finally {
       srv.stop(true);
@@ -152,12 +152,9 @@ describe("LLM path", () => {
     );
     try {
       const ai = { apiKey: "test-key", baseUrl: `http://localhost:${srv.port}`, model: "test" };
-      const { interpretation: r, reason } = await interpret("Which carrier has the highest delay rate?", { meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai });
+      const r = await interpret("Which carrier has the highest delay rate?", { meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai });
       expect(r.source).toBe("rules");
-      expect(r.reasoning).toContain("(LLM unavailable: Invalid query");
-      expect(r.reasoning).toContain("used rules)");
-      // The bare reason used in answers must not carry the LLM note.
-      expect(reason).not.toContain("LLM unavailable");
+      expect(r.reasoning).toBe("Matched “delay rate”, grouped by carrier. (AI unavailable, used keyword matching.)");
     } finally {
       srv.stop(true);
     }
@@ -167,9 +164,9 @@ describe("LLM path", () => {
     const srv = stub(() => new Response("nope", { status: 500 }));
     try {
       const ai = { apiKey: "test-key", baseUrl: `http://localhost:${srv.port}`, model: "test" };
-      const { interpretation: r } = await interpret("Which carrier has the highest delay rate?", { meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai });
+      const r = await interpret("Which carrier has the highest delay rate?", { meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai });
       expect(r).toMatchObject({ tool: "query", source: "rules" });
-      expect(r.reasoning).toContain("LLM unavailable: HTTP 500");
+      expect(r.reasoning).toEndWith("(AI unavailable, used keyword matching.)");
     } finally {
       srv.stop(true);
     }
