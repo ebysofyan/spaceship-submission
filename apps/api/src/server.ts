@@ -1,8 +1,24 @@
 import { join, resolve, sep } from "node:path";
+import { runForecast, runQuery } from "@app/core";
+import { ask, InputError } from "./ask";
+import { aiConfigFromEnv, type AiConfig } from "./ai/llm";
+import { buildSchemas, parseForecast, parseQuery } from "./ai/schemas";
+import { loadDataset, type Dataset } from "./data";
 
 // Repo-relative, so the server works from any cwd.
 const WEB_DIST = resolve(import.meta.dir, "../../web/dist");
 const INDEX_HTML = join(WEB_DIST, "index.html");
+
+const json = (body: unknown, status = 200) => Response.json(body, { status });
+const badRequest = (e: unknown) => json({ error: e instanceof Error ? e.message : String(e) }, 400);
+
+async function readJson(req: Request): Promise<unknown> {
+  try {
+    return await req.json();
+  } catch {
+    throw new InputError("Request body must be JSON");
+  }
+}
 
 async function serveWeb(pathname: string): Promise<Response> {
   if (!(await Bun.file(INDEX_HTML).exists())) {
@@ -18,18 +34,60 @@ async function serveWeb(pathname: string): Promise<Response> {
   return new Response(Bun.file(INDEX_HTML));
 }
 
-const server = Bun.serve({
-  port: Number(process.env.PORT) || 3000,
-  routes: {
-    "/api/health": { GET: () => Response.json({ ok: true }) },
-  },
-  fetch(req) {
-    const { pathname } = new URL(req.url);
-    if (pathname.startsWith("/api/")) {
-      return Response.json({ error: "Not found" }, { status: 404 });
-    }
-    return serveWeb(pathname);
-  },
-});
+export function createServer(dataset: Dataset, ai: AiConfig, port = 3000) {
+  const { orders, meta, dashboard } = dataset;
+  const schemas = buildSchemas(meta);
 
-console.log(`Server listening on http://localhost:${server.port}`);
+  return Bun.serve({
+    port,
+    routes: {
+      "/api/health": { GET: () => json({ ok: true, aiMode: ai.apiKey ? "llm" : "rules" }) },
+      "/api/meta": { GET: () => json(meta) },
+      "/api/dashboard": { GET: () => json(dashboard) },
+      "/api/query": {
+        POST: async (req) => {
+          try {
+            return json(runQuery(orders, parseQuery(schemas, await readJson(req))));
+          } catch (e) {
+            return badRequest(e);
+          }
+        },
+      },
+      "/api/forecast": {
+        POST: async (req) => {
+          try {
+            return json(runForecast(orders, parseForecast(schemas, await readJson(req))));
+          } catch (e) {
+            return badRequest(e);
+          }
+        },
+      },
+      "/api/ask": {
+        POST: async (req) => {
+          try {
+            const question = ((await readJson(req)) as { question?: unknown } | null)?.question;
+            if (typeof question !== "string") throw new InputError("question must be a string");
+            return json(await ask(question, { orders, meta, schemas, ai }));
+          } catch (e) {
+            if (e instanceof InputError) return badRequest(e);
+            console.error(e);
+            return json({ error: "Internal error" }, 500);
+          }
+        },
+      },
+    },
+    fetch(req) {
+      const { pathname } = new URL(req.url);
+      if (pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
+      return serveWeb(pathname);
+    },
+  });
+}
+
+if (import.meta.main) {
+  const ai = aiConfigFromEnv();
+  const dataset = await loadDataset();
+  const port = Number(process.env.PORT) || 3000;
+  const server = createServer(dataset, ai, port);
+  console.log(`Server listening on http://localhost:${server.port} (AI mode: ${ai.apiKey ? "llm" : "rules"})`);
+}
