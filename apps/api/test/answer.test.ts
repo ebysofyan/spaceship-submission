@@ -25,9 +25,8 @@ describe("answer templates", () => {
     expect(text).toMatch(/Delayed orders: \d+/);
   });
 
-  test("refusal lists the supported questions", () => {
-    const text = refusalAnswer("no metric recognised.", meta.examples);
-    expect(text).toStartWith("I can't answer that from this dataset");
-    expect(text).toContain(meta.examples[0]);
+  test("refusal is one short sentence, with no inlined examples or LLM notes", () => {
+    const text = refusalAnswer("no metric recognised.");
+    expect(text).toBe("I can't answer that from this dataset: no metric recognised.");
   });
 });

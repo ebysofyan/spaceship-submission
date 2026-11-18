@@ -20,8 +20,11 @@ type Filters = Partial<Record<Dimension, string[]>>;
 const unsupported = (reasoning: string): Interpretation => ({ tool: "unsupported", source: "rules", reasoning });
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-const preview = (values: string[]) =>
-  values.slice(0, 12).join(", ") + (values.length > 12 ? ", ..." : "");
+const preview = (values: string[]) => values.slice(0, 12).join(", ") + (values.length > 12 ? ", ..." : "");
+
+// Whole-word match. Categories also take a plural: "markers", "brushes".
+const valueRe = (value: string, pluralOk: boolean) =>
+  new RegExp(`(?<![\\w-])${escapeRe(value)}${pluralOk ? "(?:e?s)?" : ""}(?![\\w-])`, "i");
 
 // Dimension words, most specific first: "origin city" must not be read as destination.
 const DIM_WORDS: Array<[Dimension, string]> = [
@@ -51,6 +54,22 @@ const SCAN_DIMS: Dimension[] = [
 const valuesOf = (meta: MetaResponse, dim: Dimension): string[] =>
   dim === "sku" ? meta.skus.map((s) => s.sku) : (meta.values[dim] ?? []);
 
+// A SKU that does not exist: when its prefix is a real category, point at that category's real SKUs.
+function unknownSkuReason(sku: string, meta: MetaResponse): string {
+  const prefix = sku.split("-")[0].toUpperCase();
+  if (!meta.categories.includes(prefix)) return `SKU ${sku} does not exist`;
+  const real = meta.skus
+    .filter((s) => s.sku.startsWith(`${prefix}-`))
+    .slice(0, 5)
+    .map((s) => s.sku);
+  return `SKU ${sku} does not exist. Try: Predict demand for ${prefix}. Real ${prefix} SKUs, most orders first: ${real.join(", ")}`;
+}
+
+function unknownValueReason(meta: MetaResponse, dim: Dimension, value: string): string {
+  if (dim === "sku") return unknownSkuReason(value, meta);
+  return `unknown ${dim} value "${value}" (known: ${preview(valuesOf(meta, dim))})`;
+}
+
 // Pulls filter values out of the question. Returns the text left over for metric, grain and range parsing.
 function extractFilters(question: string, meta: MetaResponse): { filters: Filters; rest: string; error?: string } {
   const filters: Filters = {};
@@ -66,10 +85,7 @@ function extractFilters(question: string, meta: MetaResponse): { filters: Filter
       const tok = m[1];
       if (!/^[A-Z0-9]/.test(tok) && !tok.includes("-")) continue;
       const known = valuesOf(meta, dim).find((v) => same(v, tok));
-      if (!known) {
-        const values = valuesOf(meta, dim);
-        return { filters, rest, error: `unknown ${dim} value "${tok}" (known: ${preview(values)})` };
-      }
+      if (!known) return { filters, rest, error: unknownValueReason(meta, dim, tok) };
       add(dim, known);
       rest = rest.replace(m[0], " ");
     }
@@ -80,7 +96,7 @@ function extractFilters(question: string, meta: MetaResponse): { filters: Filter
     (a, b) => b.value.length - a.value.length,
   );
   for (const { dim, value } of candidates) {
-    const re = new RegExp(`(?<![\\w-])${escapeRe(value)}(?![\\w-])`, "i");
+    const re = valueRe(value, dim === "product_category");
     const m = rest.match(re);
     if (!m) continue;
     add(dim, value);
@@ -251,11 +267,11 @@ function forecastRules(question: string, meta: MetaResponse): Interpretation {
   const sku = question.match(/\b[a-z]+-\d{4}\b/i)?.[0];
   if (sku) {
     const known = meta.skus.find((s) => same(s.sku, sku));
-    if (!known) return unsupported(`unknown SKU "${sku}"`);
+    if (!known) return unsupported(unknownSkuReason(sku, meta));
     target = { kind: "sku", value: known.sku };
     label = `sku ${known.sku}`;
   } else {
-    const category = meta.categories.find((c) => new RegExp(`\\b${escapeRe(c)}\\b`, "i").test(question));
+    const category = meta.categories.find((c) => valueRe(c, true).test(question));
     if (category) {
       target = { kind: "category", value: category };
       label = `category ${category}`;

@@ -83,6 +83,7 @@ export function answerForecast(f: ForecastResult): string {
   return `${targetLabel(f.spec.target)}: ${count(r.forecastUnits)} units forecast for ${forecast.length} months (${span}). Recommended inventory ${count(r.recommendedInventory)} units, including ${count(r.safetyStock)} safety stock. Method: ${METHOD[f.method]}.${warnings}`;
 }
 
-export function refusalAnswer(reason: string, examples: string[]): string {
-  return `I can't answer that from this dataset: ${reason.replace(/\.$/, "")}.\nTry one of these:\n${examples.map((e) => `- ${e}`).join("\n")}`;
+// One sentence. The supported examples travel separately in AskResponse.supported.
+export function refusalAnswer(reason: string): string {
+  return `I can't answer that from this dataset: ${reason.replace(/\.$/, "")}.`;
 }

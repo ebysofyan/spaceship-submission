@@ -64,6 +64,36 @@ describe("rules router", () => {
     expect(route("Revenue last quarter").tool).toBe("unsupported");
   });
 
+  test("category plurals match for forecasts", () => {
+    expect(route("How much inventory should I plan for markers?")).toMatchObject({
+      tool: "forecast",
+      args: { target: { kind: "category", value: "MARKER" }, horizonMonths: 4 },
+    });
+    expect(route("Predict demand for brushes next 2 months")).toMatchObject({
+      tool: "forecast",
+      args: { target: { kind: "category", value: "BRUSH" }, horizonMonths: 2 },
+    });
+  });
+
+  test("category plurals match as product_category filters", () => {
+    expect(route("Revenue for markers")).toMatchObject({
+      tool: "query",
+      args: { metric: "revenue", filters: { product_category: ["MARKER"] } },
+    });
+  });
+
+  test("unknown SKU with a real category prefix suggests that category's real SKUs", () => {
+    // PAINT-0001 is not in the dataset; the suggestion must be the 5 PAINT SKUs with the most orders.
+    const top5 = meta.skus.filter((s) => s.sku.startsWith("PAINT-")).slice(0, 5).map((s) => s.sku);
+    for (const q of ["How much inventory should I plan for SKU PAINT-0001?", "Predict demand for PAINT-0001"]) {
+      const r = route(q);
+      expect(r.tool).toBe("unsupported");
+      expect(r.reasoning).toContain("SKU PAINT-0001 does not exist");
+      expect(r.reasoning).toContain("Try: Predict demand for PAINT");
+      expect(r.reasoning).toContain(`Real PAINT SKUs, most orders first: ${top5.join(", ")}`);
+    }
+  });
+
   test("filter values are found in free text", () => {
     expect(route("Revenue for FedEx in EU")).toMatchObject({
       tool: "query",
