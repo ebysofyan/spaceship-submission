@@ -75,8 +75,9 @@ export function Forecast({ meta, link }: { meta: MetaResponse; link: URLSearchPa
   const result = useAsync(spec ? () => forecast(spec) : null, [JSON.stringify(spec)]);
 
   return (
+    // Mobile order: recommendation, controls, details. Desktop: controls in a sticky left column.
     <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
-      <Card className="p-5 lg:sticky lg:top-24">
+      <Card className="order-2 p-5 lg:sticky lg:top-24 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1">
         <div className="space-y-5">
           <div>
             <p className="mb-2 text-xs font-medium text-body">Target</p>
@@ -139,7 +140,7 @@ export function Forecast({ meta, link }: { meta: MetaResponse; link: URLSearchPa
         </div>
       </Card>
 
-      <div className="min-w-0 space-y-6">
+      <div className={`order-1 min-w-0 transition-opacity lg:order-none lg:col-start-2 lg:row-start-1 ${result.loading ? "opacity-60" : ""}`}>
         {!spec ? (
           <EmptyState>Pick a SKU from the list to see its forecast.</EmptyState>
         ) : result.error ? (
@@ -147,9 +148,15 @@ export function Forecast({ meta, link }: { meta: MetaResponse; link: URLSearchPa
         ) : !result.data ? (
           <Skeleton className="h-96 w-full rounded-card" />
         ) : (
-          <ForecastResults result={result.data} busy={result.loading} />
+          <Recommendation result={result.data} />
         )}
       </div>
+
+      {spec && !result.error && result.data && (
+        <div className="order-3 min-w-0 lg:order-none lg:col-start-2 lg:row-start-2">
+          <ForecastResults result={result.data} busy={result.loading} />
+        </div>
+      )}
     </div>
   );
 }
@@ -166,31 +173,36 @@ function Field({ id, label, hint, children }: { id: string; label: string; hint?
   );
 }
 
-function ForecastResults({ result, busy }: { result: ForecastResult; busy: boolean }) {
+function Recommendation({ result }: { result: ForecastResult }) {
   const { recommendation: rec, spec } = result;
   const months = `${spec.horizonMonths} ${spec.horizonMonths === 1 ? "month" : "months"}`;
   return (
-    <div className={`space-y-6 transition-opacity ${busy ? "opacity-60" : ""}`} aria-busy={busy}>
-      <Card className="p-5 sm:p-6">
-        <p className="text-sm text-muted">
-          {formatTarget(spec.target)} · {Math.round((spec.serviceLevel ?? 0.95) * 100)}% service level
-        </p>
-        <h2 className="mt-1 text-balance text-2xl font-bold tracking-display text-ink sm:text-3xl">
-          Stock {formatInt(rec.recommendedInventory)} units for the next {months}
-        </h2>
-        <p className="mt-2 text-sm leading-relaxed text-body">{rec.explanation}</p>
-        <dl className="mt-5 grid max-w-md grid-cols-2 gap-4 text-sm">
-          <div>
-            <dt className="text-muted">Forecast demand</dt>
-            <dd className="mt-0.5 font-medium tabular-nums text-ink">{formatInt(rec.forecastUnits)} units</dd>
-          </div>
-          <div>
-            <dt className="text-muted">Safety stock</dt>
-            <dd className="mt-0.5 font-medium tabular-nums text-ink">{formatInt(rec.safetyStock)} units</dd>
-          </div>
-        </dl>
-      </Card>
+    <Card className="p-5 sm:p-6">
+      <p className="text-sm text-muted">
+        {formatTarget(spec.target)} · {Math.round((spec.serviceLevel ?? 0.95) * 100)}% service level
+      </p>
+      <h2 className="mt-1 text-balance text-2xl font-bold tracking-display text-ink sm:text-3xl">
+        Stock {formatInt(rec.recommendedInventory)} units for the next {months}
+      </h2>
+      <p className="mt-2 text-sm leading-relaxed text-body">{rec.explanation}</p>
+      <dl className="mt-5 grid max-w-md grid-cols-2 gap-4 text-sm">
+        <div>
+          <dt className="text-muted">Forecast demand</dt>
+          <dd className="mt-0.5 font-medium tabular-nums text-ink">{formatInt(rec.forecastUnits)} units</dd>
+        </div>
+        <div>
+          <dt className="text-muted">Safety stock</dt>
+          <dd className="mt-0.5 font-medium tabular-nums text-ink">{formatInt(rec.safetyStock)} units</dd>
+        </div>
+      </dl>
+    </Card>
+  );
+}
 
+function ForecastResults({ result, busy }: { result: ForecastResult; busy: boolean }) {
+  const { spec } = result;
+  return (
+    <div className={`space-y-6 transition-opacity ${busy ? "opacity-60" : ""}`} aria-busy={busy}>
       <Notes items={result.warnings} />
 
       <Card>
