@@ -95,7 +95,7 @@ T4 api (`apps/api/**` only):
 - [x] C2 routes: `GET /api/meta`, `GET /api/dashboard`, `POST /api/query` (QuerySpec), `POST /api/forecast` (ForecastSpec), `POST /api/ask` ({question}) — zod-validated, 400 with message on invalid. — `apps/api/src/server.ts` (`/api/meta`, `/api/dashboard`, `/api/query`, `/api/forecast`, `/api/ask`); `server.test.ts` "query rejects an invalid body with 400…"
 - [x] C3 zod schemas with enum allow-lists from data (carrier, region, category …); unknown value → refusal, never silently dropped. — `apps/api/src/ai/schemas.ts` (`buildSchemas`, allow-lists built from the data); `server.test.ts` "rejects values that are not in the dataset and unknown keys"
 - [x] C4 rules interpreter: handles the 3 example questions + forecast phrasing ("predict demand for SKU X next 4 months", "how much inventory for PAINT"), metric/dimension/grain/range keywords, filter values detected from meta; otherwise `unsupported`. — `apps/api/src/ai/rules.ts`; `apps/api/test/rules.test.ts` (the 3 examples, forecast phrasing, off-topic question)
-- [x] C5 LLM interpreter: tools `run_query`, `run_forecast`, `refuse`; system prompt lists metrics/dimensions/values/anchor; 15s timeout; any failure → rules fallback (reasoning notes it). — `apps/api/src/ai/llm.ts` (`run_query`, `run_forecast`, `refuse`; 15 s timeout; any failure → rules in `ask.ts`); `llm.test.ts`. Note: the reasoning is now built by the server (`describeSpec`), not returned by the model
+- [x] C5 LLM interpreter: tools `run_query`, `run_forecast`, `refuse`; system prompt lists metrics/dimensions/values/anchor; 15s timeout (10 s since the review); any failure → rules fallback (reasoning notes it). — `apps/api/src/ai/llm.ts` (`run_query`, `run_forecast`, `refuse`; 15 s timeout; any failure → rules in `ask.ts`); `llm.test.ts`. Note: the reasoning is now built by the server (`describeSpec`), not returned by the model
 - [x] C6 templated answers (e.g. "GLS has the highest delay rate at 37.5% (3 of 8 orders) — small base; among carriers with ≥20 orders, USPS leads at 25.5%."). — `apps/api/src/ai/answer.ts`. Note: the wording differs from the example sentence; every number comes from core
 - [x] C7 tests: rules router on the 3 examples + forecast + nonsense question; `/api/ask` integration via `fetch` against a started server. — `apps/api/test/rules.test.ts`; `apps/api/test/server.test.ts` (`/api/ask` end to end on a started server)
 
@@ -128,3 +128,14 @@ Review pass after Phase D. Each item is one commit, listed with what it changed.
 - [x] T14 `d30bd24` — instant Ask progress card (three static steps), optimistic history entry, answer fade-in that respects reduced motion.
 - [x] T15 `be50548` — no model-written text reaches users (server-built reasoning, fixed refusal sentence); daily AI cap `AI_DAILY_LIMIT` (default 500); `max_tokens` 300; 16 KB request body cap.
 - [x] Deployed to Fly — https://spaceship-logistics-eby.fly.dev (app `spaceship-logistics-eby`, region `iad`, one machine). At check time `/api/health` returned `aiMode: llm`, `aiStatus: ok`. The machine was updated 2026-11-19 01:41Z, one minute after `be50548` (01:40Z); Fly does not label the image with a commit, so the match is by timing. Evidence: EVIDENCE §1.
+
+### Review pass (2026-11-19, coordinator + Orca pi workers)
+
+- [x] W1 `6c61952` — P0: horizontal bar charts (9+ groups) painted only during their entry animation; animation off for that chart only. Tooltip values in ink.
+- [x] W2 `e954ea7` — per-IP daily AI budget (`AI_IP_DAILY_LIMIT` 40); `fly-client-ip` trusted only with `FLY_APP_NAME`; CSP, nosniff, no-referrer on every response; Cache-Control; normalised cache key; LLM timeout 15 s → 10 s.
+- [x] W3 `62a7870`, `482d87b` — single-value answers compare with the overall figure (`baseline`); counts as a share; speed words about deliveries → average delivery time.
+- [x] W4 `0622caf` — hash deep links (`#ask?q=`, `#forecast?kind&value&h`), "Ask a follow-up" on dashboard charts, "Adjust in Forecast", slow-answer note after 4 s, mobile scroll to the answer.
+- [x] W5 `62b3434` — impeccable polish: plain KPI labels, quieter charts, colour-blind-safe exception colour, "AI on / AI fallback / Keyword mode" badge, forecast led by the recommendation, methodology as a list, band over forecast months only, consumed `#ask?q=` cleared.
+- [x] Coordinator `fa5fbfa` — forecast recommendation above the controls on mobile. Docs commit — a rejected AI reading (zod) is labelled "AI reading failed validation" and is not counted as an outage.
+- [x] Redeployed to Fly (image `deployment-01M7RZR7QBPJ9R560KJ4Q20968`); live checks in EVIDENCE.
+
