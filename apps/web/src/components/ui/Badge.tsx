@@ -1,6 +1,6 @@
 import type { HTMLAttributes } from "react";
 
-type Tone = "neutral" | "accent" | "warn";
+export type Tone = "neutral" | "accent" | "warn";
 
 // accent = brand badge (#E8FAF0 on #07713B text); used for the LLM/Rules mode.
 const TONES: Record<Tone, string> = {

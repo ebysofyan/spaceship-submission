@@ -15,7 +15,7 @@ interface Entry {
   response: AskResponse;
 }
 
-export function Ask({ meta }: { meta: MetaResponse }) {
+export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () => void }) {
   const [draft, setDraft] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]); // newest first
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -41,6 +41,7 @@ export function Ask({ meta }: { meta: MetaResponse }) {
       setFailed({ question: q, message: errorMessage(e) });
     } finally {
       setPending(false);
+      onAnswered();
     }
   }
 

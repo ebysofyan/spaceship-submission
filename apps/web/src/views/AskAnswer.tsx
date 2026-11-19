@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
-import { AlertCircle, ChevronDown } from "lucide-react";
-import type { AskResponse, ForecastResult, QueryResult, QuerySpec } from "@app/core";
+import { AlertCircle } from "lucide-react";
+import type { AskResponse, ForecastResult, QueryResult } from "@app/core";
 import { DynamicChart } from "../components/DynamicChart";
 import { ForecastChart } from "../components/ForecastChart";
 import { ForecastTable, OrdersTable, ResultTable } from "../components/DataTables";
 import { Badge } from "../components/ui/Badge";
 import { Card } from "../components/ui/Card";
 import { Chip } from "../components/ui/Button";
+import { Disclosure } from "../components/ui/Disclosure";
 import { Notes } from "../components/ui/States";
-import { formatDayRange, formatInt, formatTarget, methodLabel, sourceLabel, toolLabel } from "../format";
+import { filterLabel, formatDayRange, formatInt, formatTarget, methodLabel, sourceLabel, toolLabel } from "../format";
 
 const SOURCE_TITLE: Record<"llm" | "rules", string> = {
   llm: "Interpreted by an LLM",
@@ -52,42 +53,36 @@ export function AnswerCard({
 
       {notes.length > 0 && <Notes items={notes} />}
 
-      <details className="group rounded-control border border-line">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-control px-4 py-3 text-sm font-medium text-ink transition-colors hover:bg-subtle [&::-webkit-details-marker]:hidden">
-          Details
-          <ChevronDown className="shrink-0 text-muted transition-transform group-open:rotate-180" size={16} aria-hidden="true" />
-        </summary>
-        <div className="space-y-6 border-t border-line p-4">
-          <Section title="Reasoning">
-            <p className="text-sm leading-relaxed text-body">{interpretation.reasoning}</p>
+      <Disclosure label="Details" bodyClassName="space-y-6">
+        <Section title="Reasoning">
+          <p className="text-sm leading-relaxed text-body">{interpretation.reasoning}</p>
+        </Section>
+        {(query || forecast) && (
+          <Section title="Metric definition">
+            <p className="text-sm leading-relaxed text-body">{query?.metricDefinition ?? forecast?.methodology}</p>
           </Section>
-          {(query || forecast) && (
-            <Section title="Metric definition">
-              <p className="text-sm leading-relaxed text-body">{query?.metricDefinition ?? forecast?.methodology}</p>
-            </Section>
-          )}
-          <Section title="Structured query (JSON)">
-            <pre className="overflow-x-auto rounded-control bg-dark-0 p-4 text-xs leading-relaxed text-white">
-              {JSON.stringify(interpretation.args, null, 2)}
-            </pre>
+        )}
+        <Section title="Structured query (JSON)">
+          <pre className="overflow-x-auto rounded-control bg-dark-0 p-4 text-xs leading-relaxed text-white">
+            {JSON.stringify(interpretation.args, null, 2)}
+          </pre>
+        </Section>
+        {query && query.rows.length > 0 && (
+          <Section title="Result table">
+            <ResultTable result={query} />
           </Section>
-          {query && query.rows.length > 0 && (
-            <Section title="Result table">
-              <ResultTable result={query} />
-            </Section>
-          )}
-          {forecast && (
-            <Section title="Forecast table">
-              <ForecastTable result={forecast} />
-            </Section>
-          )}
-          {query && (
-            <Section title={`Orders in scope (${formatInt(query.matchedOrders)}, showing first ${query.sampleOrders.length})`}>
-              <OrdersTable orders={query.sampleOrders} />
-            </Section>
-          )}
-        </div>
-      </details>
+        )}
+        {forecast && (
+          <Section title="Forecast table">
+            <ForecastTable result={forecast} />
+          </Section>
+        )}
+        {query && (
+          <Section title={`Orders in scope (${formatInt(query.matchedOrders)}, showing first ${query.sampleOrders.length})`}>
+            <OrdersTable orders={query.sampleOrders} />
+          </Section>
+        )}
+      </Disclosure>
     </Card>
   );
 }
@@ -108,13 +103,6 @@ function forecastParts(forecast: ForecastResult): string[] {
   const { spec } = forecast;
   const months = `${spec.horizonMonths} month${spec.horizonMonths === 1 ? "" : "s"}`;
   return ["Forecast", formatTarget(spec.target), months, methodLabel(forecast.method)];
-}
-
-function filterLabel(filters: QuerySpec["filters"]): string {
-  const parts = Object.entries(filters ?? {}).flatMap(([dim, values]) =>
-    values?.length ? [`${dim.replace("_", " ")} ${values.join(", ")}`] : [],
-  );
-  return `Filters: ${parts.length > 0 ? parts.join("; ") : "none"}`;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {

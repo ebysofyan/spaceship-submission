@@ -1,6 +1,7 @@
 import { Truck } from "lucide-react";
 import type { MetaResponse } from "@app/core";
 import { getHealth, getMeta, type Health } from "./api";
+import { aiBadge } from "./aiBadge";
 import { formatInt, formatMonthSpan } from "./format";
 import { useAsync, useHashTab, type AsyncState, type TabId } from "./hooks";
 import { Badge } from "./components/ui/Badge";
@@ -54,7 +55,8 @@ export function App() {
               <Dashboard meta={meta.data} />
             </div>
             <div hidden={tab !== "ask"}>
-              <Ask meta={meta.data} />
+              {/* Each answer may flip the AI between llm and fallback, so re-check health. */}
+              <Ask meta={meta.data} onAnswered={health.retry} />
             </div>
             <div hidden={tab !== "forecast"}>
               <Forecast meta={meta.data} />
@@ -74,21 +76,10 @@ function datasetLabel(meta?: MetaResponse): string {
 }
 
 function AiModeBadge({ health }: { health: AsyncState<Health> }) {
-  if (health.error) return <Badge tone="warn">API offline</Badge>;
-  if (!health.data) return <Badge>Checking…</Badge>;
-  if (health.data.aiMode === "llm") {
-    return (
-      <Badge tone="accent" title="Questions are interpreted by an LLM">
-        AI
-      </Badge>
-    );
-  }
-  if (health.data.aiMode === "rules") {
-    return (
-      <Badge tone="accent" title="Questions are interpreted by deterministic rules">
-        Keyword mode
-      </Badge>
-    );
-  }
-  return <Badge>Unknown</Badge>;
+  const { label, tone, title } = aiBadge(health);
+  return (
+    <Badge tone={tone} title={title}>
+      {label}
+    </Badge>
+  );
 }

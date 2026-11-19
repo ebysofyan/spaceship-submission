@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { ForecastResult, Order, QueryResult } from "@app/core";
+import type { DashboardResponse, ForecastResult, Order, QueryResult } from "@app/core";
 import { formatInt, formatKey, formatMetric, formatStatus } from "../format";
 import { EmptyState } from "./ui/States";
 
@@ -74,6 +74,31 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
       </tbody>
     </Shell>
     </div>
+  );
+}
+
+export function DeliveryTable({ rows }: { rows: DashboardResponse["deliveryPerformanceByMonth"] }) {
+  return (
+    <Shell>
+      <thead>
+        <tr>
+          <th className={TH}>Month</th>
+          <th className={THR}>On time</th>
+          <th className={THR}>Delayed</th>
+          <th className={THR}>Exception</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-line">
+        {rows.map((r) => (
+          <tr key={r.month}>
+            <td className={TD}>{formatKey(r.month)}</td>
+            <td className={TDR}>{formatInt(r.onTime)}</td>
+            <td className={TDR}>{formatInt(r.delayed)}</td>
+            <td className={TDR}>{formatInt(r.exception)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </Shell>
   );
 }
 

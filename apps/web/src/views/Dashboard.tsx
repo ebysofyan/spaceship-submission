@@ -1,14 +1,16 @@
 import type { ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { DashboardResponse, Kpis, MetaResponse, Metric } from "@app/core";
+import type { DashboardResponse, Kpis, MetaResponse, Metric, QueryResult } from "@app/core";
 import { getDashboard } from "../api";
 import { useAsync } from "../hooks";
 import { AXIS_TICK, CHART, LEGEND_LABEL, TOOLTIP_STYLE } from "../components/chartTheme";
+import { DeliveryTable, ResultTable } from "../components/DataTables";
 import { DynamicChart } from "../components/DynamicChart";
 import { Card, CardHeader } from "../components/ui/Card";
+import { Disclosure } from "../components/ui/Disclosure";
 import { InfoHint } from "../components/ui/InfoHint";
 import { ErrorState, Notes, Skeleton } from "../components/ui/States";
-import { formatDays, formatInt, formatKey, formatPercent } from "../format";
+import { formatDays, formatInt, formatKey, formatPercent, scopeLine } from "../format";
 
 export function Dashboard({ meta }: { meta: MetaResponse }) {
   const state = useAsync(getDashboard, []);
@@ -20,20 +22,41 @@ export function Dashboard({ meta }: { meta: MetaResponse }) {
     <div className="space-y-6">
       <KpiGrid kpis={d.kpis} meta={meta} />
       <div className="grid gap-6 lg:grid-cols-2">
-        <ChartCard title="Orders by month" description="Orders per calendar month, by order date" notes={d.ordersByMonth.notes}>
+        <ChartCard
+          title="Orders by month"
+          description="Orders per calendar month, by order date"
+          notes={d.ordersByMonth.notes}
+          explain={<QueryData result={d.ordersByMonth} meta={meta} />}
+        >
           <DynamicChart result={d.ordersByMonth} />
         </ChartCard>
-        <ChartCard title="Delivery performance by month" description="Delivery outcome per order month">
+        <ChartCard
+          title="Delivery performance by month"
+          description="Delivery outcome per order month"
+          explain={
+            <>
+              <p className="text-sm text-body">{scopeLine("Delivery outcomes", "by month", meta.dateRange)}</p>
+              <p className="text-sm leading-relaxed text-body">Counts of status delivered / delayed / exception per order month</p>
+              <DeliveryTable rows={d.deliveryPerformanceByMonth} />
+            </>
+          }
+        >
           <DeliveryChart rows={d.deliveryPerformanceByMonth} />
         </ChartCard>
         <ChartCard
           title="Delay rate by carrier"
           description="(delayed + exception) ÷ delivery base. Hover a bar for its base size."
           notes={d.delayRateByCarrier.notes}
+          explain={<QueryData result={d.delayRateByCarrier} meta={meta} />}
         >
           <DynamicChart result={d.delayRateByCarrier} />
         </ChartCard>
-        <ChartCard title="Orders by region" description="Orders per fulfilment region" notes={d.ordersByRegion.notes}>
+        <ChartCard
+          title="Orders by region"
+          description="Orders per fulfilment region"
+          notes={d.ordersByRegion.notes}
+          explain={<QueryData result={d.ordersByRegion} meta={meta} />}
+        >
           <DynamicChart result={d.ordersByRegion} />
         </ChartCard>
       </div>
@@ -76,11 +99,13 @@ function ChartCard({
   title,
   description,
   notes = [],
+  explain,
   children,
 }: {
   title: string;
   description: string;
   notes?: string[];
+  explain: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -89,8 +114,25 @@ function ChartCard({
       <div className="p-5">
         {children}
         <Notes items={notes} />
+        <div className="mt-5">
+          <Disclosure label="View data" bodyClassName="space-y-4">
+            {explain}
+          </Disclosure>
+        </div>
       </div>
     </Card>
+  );
+}
+
+// What a query chart is built from: scope line, metric definition, and the rows behind it.
+function QueryData({ result, meta }: { result: QueryResult; meta: MetaResponse }) {
+  const grouping = `by ${result.spec.timeGrain ?? result.spec.groupBy}`;
+  return (
+    <>
+      <p className="text-sm text-body">{scopeLine(result.metricLabel, grouping, meta.dateRange, result.spec.filters)}</p>
+      <p className="text-sm leading-relaxed text-body">{result.metricDefinition}</p>
+      <ResultTable result={result} />
+    </>
   );
 }
 

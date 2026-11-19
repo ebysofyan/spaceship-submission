@@ -1,4 +1,4 @@
-import type { ForecastResult, ForecastSpec, Interpretation, Metric } from "@app/core";
+import type { ForecastResult, ForecastSpec, Interpretation, Metric, QuerySpec } from "@app/core";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTH_KEY = /^(\d{4})-(\d{2})$/;
@@ -63,3 +63,16 @@ const TOOL_LABELS: Record<Interpretation["tool"], string> = {
 export const toolLabel = (tool: Interpretation["tool"]) => TOOL_LABELS[tool];
 
 export const sourceLabel = (source: "llm" | "rules") => (source === "llm" ? "AI" : "Keyword matching");
+
+// "Filters: carrier GLS; region North" or "Filters: none".
+export function filterLabel(filters: QuerySpec["filters"]): string {
+  const parts = Object.entries(filters ?? {}).flatMap(([dim, values]) =>
+    values?.length ? [`${dim.replace("_", " ")} ${values.join(", ")}`] : [],
+  );
+  return `Filters: ${parts.length > 0 ? parts.join("; ") : "none"}`;
+}
+
+// Dashboard charts: "Delay rate · by carrier · All dates (Jan–Dec 2025) · Filters: none". Dashboard charts never filter by date.
+export function scopeLine(metricLabel: string, grouping: string, dateRange: { from: string; to: string }, filters?: QuerySpec["filters"]): string {
+  return [metricLabel, grouping, `All dates (${formatMonthSpan(dateRange.from, dateRange.to)})`, filterLabel(filters)].join(" · ");
+}

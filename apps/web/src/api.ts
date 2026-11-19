@@ -4,6 +4,8 @@ import type { AskResponse, DashboardResponse, ForecastResult, ForecastSpec, Meta
 export interface Health {
   ok: boolean;
   aiMode: "llm" | "rules";
+  model?: string;
+  aiStatus?: "ok" | "failing";
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
