@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ForecastSpec } from "@app/core";
 
 export type TabId = "dashboard" | "ask" | "forecast";
 const TAB_IDS: TabId[] = ["dashboard", "ask", "forecast"];
@@ -46,20 +47,46 @@ export function useAsync<T>(load: (() => Promise<T>) | null, deps: unknown[]): A
   return { ...state, retry: () => setAttempt((a) => a + 1) };
 }
 
-const readTab = (): TabId => {
-  const hash = window.location.hash.slice(1);
-  return TAB_IDS.find((t) => t === hash) ?? "dashboard";
-};
+export interface Route {
+  tab: TabId;
+  params: URLSearchParams;
+}
 
-/** Tab state stored in location.hash (#dashboard, #ask, #forecast). */
-export function useHashTab(): [TabId, (tab: TabId) => void] {
-  const [tab, setTab] = useState<TabId>(readTab);
+// Plain hash routing: #ask?q=<question>, #forecast?kind=…&value=…&h=…. Unknown tabs fall back to the dashboard.
+export function parseRoute(hash: string): Route {
+  const body = hash.replace(/^#/, "");
+  const at = body.indexOf("?");
+  const name = at === -1 ? body : body.slice(0, at);
+  const search = at === -1 ? "" : body.slice(at + 1);
+  return { tab: TAB_IDS.find((t) => t === name) ?? "dashboard", params: new URLSearchParams(search) };
+}
+
+// Same limit as the API (500 characters); anything else is ignored rather than sent to be refused.
+export function askQuestion(params: URLSearchParams): string | undefined {
+  const q = params.get("q")?.trim();
+  return q && q.length <= 500 ? q : undefined;
+}
+
+export const askHref = (question: string) => `#ask?${new URLSearchParams({ q: question })}`;
+
+export function forecastHref(spec: ForecastSpec): string {
+  const { target } = spec;
+  const params = new URLSearchParams({ kind: target.kind, h: String(spec.horizonMonths) });
+  if (target.kind !== "all") params.set("value", target.value);
+  return `#forecast?${params}`;
+}
+
+const readRoute = (): Route => parseRoute(window.location.hash);
+
+/** Route state from location.hash; the setter changes only the tab, so a tab click drops any query. */
+export function useHashTab(): [Route, (tab: TabId) => void] {
+  const [route, setRoute] = useState<Route>(readRoute);
 
   useEffect(() => {
-    const onChange = () => setTab(readTab());
+    const onChange = () => setRoute(readRoute());
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
 
-  return [tab, (next) => (window.location.hash = next)];
+  return [route, (next) => (window.location.hash = next)];
 }

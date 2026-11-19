@@ -3,7 +3,7 @@ import type { MetaResponse } from "@app/core";
 import { getHealth, getMeta, type Health } from "./api";
 import { aiBadge } from "./aiBadge";
 import { formatInt, formatMonthSpan } from "./format";
-import { useAsync, useHashTab, type AsyncState, type TabId } from "./hooks";
+import { askQuestion, useAsync, useHashTab, type AsyncState, type TabId } from "./hooks";
 import { Badge } from "./components/ui/Badge";
 import { Tabs } from "./components/ui/Tabs";
 import { ErrorState, Skeleton } from "./components/ui/States";
@@ -18,7 +18,8 @@ const TABS: Array<{ value: TabId; label: string }> = [
 ];
 
 export function App() {
-  const [tab, setTab] = useHashTab();
+  const [route, setTab] = useHashTab();
+  const tab = route.tab;
   const meta = useAsync(getMeta, []);
   const health = useAsync(getHealth, []);
 
@@ -56,10 +57,10 @@ export function App() {
             </div>
             <div hidden={tab !== "ask"}>
               {/* Each answer may flip the AI between llm and fallback, so re-check health. */}
-              <Ask meta={meta.data} onAnswered={health.retry} />
+              <Ask meta={meta.data} question={tab === "ask" ? askQuestion(route.params) : undefined} onAnswered={health.retry} />
             </div>
             <div hidden={tab !== "forecast"}>
-              <Forecast meta={meta.data} />
+              <Forecast meta={meta.data} link={tab === "forecast" ? route.params : null} />
             </div>
           </>
         )}

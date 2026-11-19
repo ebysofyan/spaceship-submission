@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { DashboardResponse, Kpis, MetaResponse, Metric, QueryResult } from "@app/core";
+import { MessageSquareText } from "lucide-react";
 import { getDashboard } from "../api";
-import { useAsync } from "../hooks";
+import { askHref, useAsync } from "../hooks";
 import { AXIS_TICK, CHART, LEGEND_LABEL, TOOLTIP_ITEM_STYLE, TOOLTIP_STYLE } from "../components/chartTheme";
 import { DeliveryTable, ResultTable } from "../components/DataTables";
 import { DynamicChart } from "../components/DynamicChart";
@@ -26,6 +27,7 @@ export function Dashboard({ meta }: { meta: MetaResponse }) {
           title="Orders by month"
           description="Orders per calendar month, by order date"
           notes={d.ordersByMonth.notes}
+          followUp="Show orders by week for the last 3 months"
           explain={<QueryData result={d.ordersByMonth} meta={meta} />}
         >
           <DynamicChart result={d.ordersByMonth} />
@@ -33,6 +35,7 @@ export function Dashboard({ meta }: { meta: MetaResponse }) {
         <ChartCard
           title="Delivery performance by month"
           description="Delivery outcome per order month"
+          followUp="What is the on-time rate by month?"
           explain={
             <>
               <p className="text-sm text-body">{scopeLine("Delivery outcomes", "by month", meta.dateRange)}</p>
@@ -47,6 +50,7 @@ export function Dashboard({ meta }: { meta: MetaResponse }) {
           title="Delay rate by carrier"
           description="(delayed + exception) ÷ delivery base. Hover a bar for its base size."
           notes={d.delayRateByCarrier.notes}
+          followUp="Which carrier has the highest delay rate?"
           explain={<QueryData result={d.delayRateByCarrier} meta={meta} />}
         >
           <DynamicChart result={d.delayRateByCarrier} />
@@ -55,6 +59,7 @@ export function Dashboard({ meta }: { meta: MetaResponse }) {
           title="Orders by region"
           description="Orders per fulfilment region"
           notes={d.ordersByRegion.notes}
+          followUp="What is the on-time rate by region?"
           explain={<QueryData result={d.ordersByRegion} meta={meta} />}
         >
           <DynamicChart result={d.ordersByRegion} />
@@ -99,18 +104,33 @@ function ChartCard({
   title,
   description,
   notes = [],
+  followUp,
   explain,
   children,
 }: {
   title: string;
   description: string;
   notes?: string[];
+  followUp: string;
   explain: ReactNode;
   children: ReactNode;
 }) {
   return (
     <Card>
-      <CardHeader title={title} description={description} />
+      <CardHeader
+        title={title}
+        description={description}
+        action={
+          <a
+            href={askHref(followUp)}
+            title={followUp}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full no-underline border border-line bg-surface px-3 py-1.5 text-xs font-medium text-body transition-colors hover:bg-subtle hover:text-ink"
+          >
+            <MessageSquareText size={14} aria-hidden="true" />
+            Ask a follow-up
+          </a>
+        }
+      />
       <div className="p-5">
         {children}
         <Notes items={notes} />

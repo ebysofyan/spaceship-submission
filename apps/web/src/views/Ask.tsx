@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ChevronDown, Loader2, Search, Send } from "lucide-react";
 import type { AskResponse, MetaResponse } from "@app/core";
 import { ask } from "../api";
@@ -16,15 +16,35 @@ interface Entry {
   response?: AskResponse; // undefined while the answer is computed
 }
 
-export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () => void }) {
+export function Ask({ meta, question: deepLink, onAnswered }: { meta: MetaResponse; question?: string; onAnswered: () => void }) {
   const [draft, setDraft] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]); // newest first
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [pending, setPending] = useState<string | null>(null); // question in flight; guards double-submit
   const [failed, setFailed] = useState<{ question: string; message: string } | null>(null);
   const [showExamples, setShowExamples] = useState(false);
+  const [arrived, setArrived] = useState<number | null>(null); // id of the answer that just came in
   const inputRef = useRef<HTMLInputElement>(null);
+  const answerRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
+  const handledLink = useRef<string | undefined>(undefined); // StrictMode runs mount effects twice
+
+  // `#ask?q=` submits once per link; leaving the link (or the Ask tab) clears it so the same link works again.
+  useEffect(() => {
+    if (!deepLink) handledLink.current = undefined;
+    else if (handledLink.current !== deepLink) {
+      handledLink.current = deepLink;
+      void submit(deepLink);
+    }
+  }, [deepLink]);
+
+  // Below lg the answer sits under the form and history, so bring it into view when it arrives.
+  useEffect(() => {
+    if (arrived === null || arrived !== selectedId || !answerRef.current) return;
+    if (window.matchMedia("(min-width: 1024px)").matches) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    answerRef.current.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }, [arrived]);
 
   async function submit(question: string) {
     const q = question.trim();
@@ -38,6 +58,7 @@ export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () =
     try {
       const response = await ask(q);
       setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, response } : e)));
+      setArrived(id);
       inputRef.current?.focus();
     } catch (e) {
       setEntries((prev) => prev.filter((e) => e.id !== id));
@@ -138,11 +159,13 @@ export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () =
         </section>
 
         {pending ? (
-          <Pending question={pending} />
+          <Pending key={pending} question={pending} />
         ) : failed ? (
           <ErrorState message={failed.message} onRetry={() => void submit(failed.question)} />
         ) : selected?.response ? (
-          <AnswerCard key={selected.id} response={selected.response} examples={meta.examples} onAsk={(q) => void submit(q)} />
+          <div ref={answerRef} className="scroll-mt-40">
+            <AnswerCard key={selected.id} response={selected.response} examples={meta.examples} onAsk={(q) => void submit(q)} />
+          </div>
         ) : (
           <EmptyState>Ask a question to get started. Answers and the reasoning behind them appear here.</EmptyState>
         )}
@@ -172,6 +195,12 @@ export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () =
 // Shown from submit until the answer arrives, in the AnswerCard layout. The steps are static: the API
 // returns one response and reports no progress, so only the first step is marked active.
 export function Pending({ question }: { question: string }) {
+  // The server gives no progress, so after 4 s say only that it is still working.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), 4000);
+    return () => clearTimeout(timer);
+  }, []);
   return (
     <Card className="space-y-6 p-5 sm:p-6">
       <div>
@@ -181,6 +210,7 @@ export function Pending({ question }: { question: string }) {
           <Step label="Running the query" />
           <Step label="Building the chart" />
         </ul>
+        {slow && <p className="mt-3 text-sm text-muted">Still working. If the AI takes more than 10 s, the answer comes from keyword matching instead.</p>}
       </div>
       <Skeleton className="h-48 w-full" />
     </Card>

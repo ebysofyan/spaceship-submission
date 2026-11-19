@@ -10,6 +10,7 @@ import { Chip } from "../components/ui/Button";
 import { Disclosure } from "../components/ui/Disclosure";
 import { Notes } from "../components/ui/States";
 import { filterLabel, formatDayRange, formatInt, formatOverall, formatTarget, methodLabel, sourceLabel, toolLabel } from "../format";
+import { forecastHref } from "../hooks";
 
 const WHY = /\bwhy\b/i;
 
@@ -60,6 +61,12 @@ export function AnswerCard({
       </div>
 
       {notes.length > 0 && <Notes items={notes} />}
+
+      {interpretation.tool === "forecast" && (
+        <a href={forecastHref(interpretation.args)} className="text-sm font-medium text-brand-700 hover:underline">
+          Adjust in Forecast
+        </a>
+      )}
 
       <Disclosure label="Details" bodyClassName="space-y-6">
         <Section title="Reasoning">

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { ForecastResult, ForecastSpec, MetaResponse } from "@app/core";
 import { forecast } from "../api";
 import { useAsync } from "../hooks";
@@ -20,6 +20,26 @@ const KINDS: Array<{ value: Kind; label: string }> = [
 ];
 const SERVICE_LEVELS = [0.9, 0.95, 0.99];
 
+export interface ForecastLink {
+  kind?: Kind;
+  category?: string;
+  sku?: string;
+  horizon?: number;
+}
+
+// Controls from a `#forecast?kind=&value=&h=` link. Values that do not match the data are dropped.
+export function forecastFromParams(params: URLSearchParams, meta: Pick<MetaResponse, "categories" | "skus">): ForecastLink {
+  const kind = params.get("kind");
+  const value = params.get("value")?.trim().toLowerCase() ?? "";
+  const h = Number(params.get("h"));
+  const link: ForecastLink = {};
+  if (kind === "all" || kind === "category" || kind === "sku") link.kind = kind;
+  if (kind === "category") link.category = meta.categories.find((c) => c.toLowerCase() === value);
+  if (kind === "sku") link.sku = meta.skus.find((s) => s.sku.toLowerCase() === value)?.sku;
+  if (Number.isInteger(h) && h >= 1 && h <= 12) link.horizon = h;
+  return link;
+}
+
 // null until the SKU text matches a known SKU: no request for half-typed input.
 function buildSpec(kind: Kind, category: string, sku: string | undefined, horizonMonths: number, serviceLevel: number): ForecastSpec | null {
   const base = { horizonMonths, serviceLevel };
@@ -28,12 +48,23 @@ function buildSpec(kind: Kind, category: string, sku: string | undefined, horizo
   return sku ? { ...base, target: { kind: "sku", value: sku } } : null;
 }
 
-export function Forecast({ meta }: { meta: MetaResponse }) {
+export function Forecast({ meta, link }: { meta: MetaResponse; link: URLSearchParams | null }) {
   const [kind, setKind] = useState<Kind>("all");
   const [category, setCategory] = useState(meta.categories[0] ?? "");
   const [skuText, setSkuText] = useState("");
   const [horizon, setHorizon] = useState(4);
   const [serviceLevel, setServiceLevel] = useState(0.95);
+
+  // Keyed on the query string, so a link applies when it arrives and not on every render.
+  const linkKey = link?.toString() ?? "";
+  useEffect(() => {
+    if (!linkKey) return;
+    const next = forecastFromParams(new URLSearchParams(linkKey), meta);
+    if (next.kind) setKind(next.kind);
+    if (next.category) setCategory(next.category);
+    if (next.sku) setSkuText(next.sku);
+    if (next.horizon) setHorizon(next.horizon);
+  }, [linkKey, meta]);
 
   const sku = meta.skus.find((s) => s.sku.toLowerCase() === skuText.trim().toLowerCase())?.sku;
   const spec = buildSpec(kind, category, sku, horizon, serviceLevel);
