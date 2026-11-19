@@ -30,6 +30,7 @@ To use the LLM router, copy `.env.example` to `.env` (git-ignored) and set `AI_A
 | `AI_MODEL` | `gpt-6-luna` | Model name sent to `AI_BASE_URL`. `glm-5.3-flash` is the cheaper, slower alternative. |
 | `AI_REASONING_EFFORT` | `none` | Sent as `reasoning_effort`. `gpt-6-luna` rejects tool calls without `none`. Empty = not sent. |
 | `AI_DAILY_LIMIT` | `500` | LLM calls per UTC day. After that, questions use keyword matching and make no LLM call. `0` turns the LLM off. Counter is per process. |
+| `AI_IP_DAILY_LIMIT` | `40` | LLM calls per client IP per UTC day. Over the limit, that IP gets keyword matching. Cache hits don't count. Counter is per process. |
 | `PORT` | `3000` | HTTP port. Keep it at 3000 for `bun run dev`, because the Vite proxy targets it. |
 | `DATA_PATH` | `data/mock_logistics_data.csv` | CSV loaded at boot. |
 
@@ -88,7 +89,7 @@ apps/web/src       Vite + React SPA: views Dashboard, Ask, Forecast
 2. `interpret()` (`ask.ts`) uses the LLM tool call when `AI_API_KEY` is set, otherwise the rules router. Either way it returns `query`, `forecast` or `unsupported`.
 3. The spec is validated with zod (`ai/schemas.ts`). Core validates it again.
 4. `runQuery` or `runForecast` computes over the in-memory orders. `ai/answer.ts` writes the sentence.
-5. The response carries the interpretation, result, rows and notes. The UI shows the answer, a chart picked from the result shape (`DynamicChart`), and a Details panel. While the request is in flight, a progress card (three static steps; the API reports no progress) and a history entry appear at once.
+5. The response carries the interpretation, result, rows and notes. The UI shows the answer, a chart picked from the result shape (`DynamicChart`), and a Details panel. While the request is in flight, a progress card (three static steps; the API reports no progress) and a history entry appear at once. After 4 s the card says the answer falls back to keyword matching if the AI takes over 10 s.
 
 The dashboard skips steps 1–3: `GET /api/dashboard` returns `getDashboard(orders)`, computed once at boot.
 
@@ -98,14 +99,14 @@ The dashboard skips steps 1–3: `GET /api/dashboard` returns `getDashboard(orde
 
 ### How tools are selected (LLM path)
 
-- `llm.ts` calls `/chat/completions` with `temperature: 0`, `tool_choice: "required"`, `max_tokens: 300` and a 15 s timeout.
+- `llm.ts` calls `/chat/completions` with `temperature: 0`, `tool_choice: "required"`, `max_tokens: 300` and a 10 s timeout.
 - Three tools: `run_query`, `run_forecast`, `refuse`. Their parameter schemas are generated from the zod schemas that validate the reply (`z.toJSONSchema`), so they cannot drift apart. The reasoning shown to users is built by the server from the validated arguments. Any `reasoning` text the model returns is dropped.
 - The system prompt lists the metric definitions, dimensions, allowed values, the anchor date, and rules for ranges, grouping and status filters.
 - Enums with more than 20 values (SKUs, cities, client IDs) are not sent; the prompt gives an example instead. One measured question went from 7,990 prompt tokens (glm, untrimmed schema) to about 1,970 on glm, or about 1,570 on gpt-6-luna. zod still enforces the full allow-list on the reply.
 - Any failure (HTTP error, timeout, no tool call, invalid arguments) falls back to the rules router. The reasoning then ends "(AI unavailable, used keyword matching.)", and the header badge shows **AI fallback** until the next successful call.
 - `tidyQuery` removes a status filter that restates the metric (`delayed_count` with status delayed) and a limit of 1.
-- Successful LLM interpretations are cached in memory per server instance, keyed by the trimmed, lower-cased question (500 entries, oldest dropped). Rules results and failures are not cached.
-- `/api/ask` is rate-limited to 20 requests per minute per client IP, **only when a key is set**. Behind Fly, the client IP comes from `fly-client-ip`. LLM calls are also capped per UTC day by `AI_DAILY_LIMIT`.
+- Successful LLM interpretations are cached in memory per server instance, keyed by the question after trimming, lower-casing, collapsing spaces and dropping trailing `?.!` (500 entries, oldest dropped). Rules results and failures are not cached.
+- `/api/ask` is rate-limited to 20 requests per minute per client IP, **only when a key is set**. The client IP comes from `fly-client-ip` only when `FLY_APP_NAME` is set (Fly sets both); elsewhere that header is ignored and the socket address is used. LLM calls are also capped per UTC day, globally by `AI_DAILY_LIMIT` and per client IP by `AI_IP_DAILY_LIMIT`, so one caller cannot use up the AI for everyone.
 - `/api/health` reports `{ aiMode: "llm", model, aiStatus: "ok" | "failing" | "limited" }`, or `{ aiMode: "rules" }` without a key.
 
 ### How tools are selected (rules path)
@@ -115,7 +116,7 @@ The dashboard skips steps 1–3: `GET /api/dashboard` returns `getDashboard(orde
 1. **Refusals first.** Promotion words ("promo", "promotion") are refused. A filter-style word with an unknown value ("carrier Foo", "SKU PAINT-9999") is refused. For an unknown SKU whose prefix is a real category, the reply suggests that category.
 2. **Filters.** Known values match as whole words, case-insensitively, longest first, so `London, UK` beats `UK`. This covers carrier, region, warehouse, city, category (plurals too), SKU, client, and status words (`canceled`, `in transit`, `exception`). City short names work: "London" means `London, UK`; "from X" is an origin and "to X" a destination. A city on the wrong side is refused with the fix.
 3. **Forecast.** `predict`, `forecast`, `demand`, `inventory` or `stock` routes to the forecast tool. A SKU or category is the target. `N months` sets the horizon (default 4); anything outside 1–12 is refused.
-4. **Metric.** `late`, `delayed` or `delay` give `delayed_count`, or `delay_rate` with a rate word. `deliver` verbs give `delivered_count`. Also: on-time, lead time, AOV, revenue, units, orders. Superlatives with no measure: "reliable" or "best" → on-time rate, "worst" → delay rate, "slowest" or "fastest" → average delivery time. A status filter alone counts orders. A carrier, region or warehouse alone gets the on-time rate. No recognised measure → refused.
+4. **Metric.** `late`, `delayed` or `delay` give `delayed_count`, or `delay_rate` with a rate word. `deliver` verbs give `delivered_count`, or `avg_delivery_days` with a speed word (slow, fast, long, quick). Also: on-time, lead time, AOV, revenue, units, orders. Superlatives with no measure: "reliable" or "best" → on-time rate, "worst" → delay rate, "slowest" or "fastest" → average delivery time. A status filter alone counts orders. A carrier, region or warehouse alone gets the on-time rate. No recognised measure → refused.
 5. **Grain and grouping.** `daily`, `weekly`, `monthly`, `trend`, `over time` set the time grain. The first dimension named is the grouping. With a grain, or with a second grouping, the extra dimension is dropped and the reasoning says "one grouping per question". `top N` and `bottom N` set a limit; `lowest` and `fewest` sort ascending. Two or more values of one dimension ("UPS and FedEx") compare them.
 6. **Ranges.** `last N days/weeks/months`, `Q1`–`Q4`, and month names (in the data year). `this month`, `last quarter`, `last year` and `last half` are refused.
 
@@ -137,6 +138,8 @@ For glm-5.3-flash, 9/12 passed on the first run. After one prompt fix, the two f
 - Answers are templates over core results (`ai/answer.ts`). Rates show their base ("3 of 8 orders"). Groups with fewer than 20 orders are flagged, and when the leader is small, the leader among larger groups is also named.
 - Each answer has a **Details** panel: reasoning and source (LLM or rules), metric and definition, the structured spec as JSON, the result table, and the first 100 matching orders with the total count.
 - Each dashboard chart has a **View data** panel: the scope line (metric, grouping, date range, filters), the definition, and the rows behind the chart.
+- Single-value answers with a filter or date range carry a `baseline`: the same metric over all orders. The sentence and the line under the figure compare with it: rates in points, averages as a gap ("0.32 days slower than the 3.83-day average"), counts as a share ("4 of 55 delayed orders overall"). For "why" questions this is the diagnostic answer: the data has no cause fields, and the UI says so.
+- **Navigation:** the URL hash is the route: `#dashboard`, `#ask`, `#forecast`. `#ask?q=<question>` asks once. `#forecast?kind=all|category|sku&value=<v>&h=<1-12>` sets the Forecast controls. Each dashboard chart has an "Ask a follow-up" link, and forecast answers link to the Forecast tab. The three tabs map to the brief's three levels: descriptive, diagnostic, predictive.
 - Core notes (such as "GLS: small base (8 orders)") appear under each answer.
 
 ## Supported queries (documented subset)
@@ -210,7 +213,8 @@ Delivery base = `delivered + delayed + exception` (370 orders). In-transit and c
 - **Fixed metric set** of nine. No free-form SQL and no custom metrics.
 - **LLM quality is measured on 12 questions only.** The eval script costs money to run and is not part of `bun test`. Results can change with the model.
 - **Data is in memory and loaded at boot.** A changed CSV needs a restart.
-- **No authentication; query history lasts for one page load.** Anyone with the URL can call the API. The only limits are on `/api/ask` in LLM mode (20 a minute per IP, and the daily cap). They are in memory, per process, and reset on restart.
+- **Horizontal bar charts have no entry animation.** Recharts 3.11 leaves those bars unpainted after the animation, so it is off for them only (`DynamicChart.tsx`).
+- **No authentication; query history lasts for one page load.** Anyone with the URL can call the API. The only limits are on `/api/ask` in LLM mode (20 a minute per IP, 40 LLM calls a day per IP, and the global daily cap). They are in memory, per process, and reset on restart.
 
 ## Future improvements
 
@@ -240,7 +244,8 @@ Public, read-only and unauthenticated by design. The threat model and checklist 
 - **Cost:** 20 asks a minute per IP, `AI_DAILY_LIMIT` LLM calls a UTC day, `max_tokens` 300, a 500-character question cap, an interpretation cache, and a free keyword fallback.
 - **Payloads and errors:** 16 KB body cap. Unexpected errors return `Internal error`; details go to the server log only.
 - **Secrets:** `AI_API_KEY` is read from the server environment (a Fly secret). `.env` is git-ignored and not in the Docker image.
-- **Limits:** counters are in memory and per process. IP rotation can use up the daily cap, which bounds cost, not availability. No CSP or extra security headers are set.
+- **Headers:** every response has a CSP (`default-src 'self'`, no inline scripts; styles allow `'unsafe-inline'` for Recharts), `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. `/assets/*` is cached `immutable` for a year, `index.html` is `no-cache`, `/api/*` is `no-store`. Bun's own 413 for bodies over 16 KB has no headers and no content.
+- **Limits:** counters are in memory and per process. A per-IP daily AI budget stops one caller from using up the global cap; rotating many IPs still can, which bounds cost, not availability.
 
 ## Deployment
 
