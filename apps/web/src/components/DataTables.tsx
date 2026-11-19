@@ -20,14 +20,17 @@ function Shell({ children }: { children: ReactNode }) {
 export function ResultTable({ result }: { result: QueryResult }) {
   const { rows, spec, isRate, metricLabel, chart } = result;
   if (rows.length === 0) return <EmptyState>No rows match this question.</EmptyState>;
+  // Order count is already the value column, and a null base means no denominator: skip those columns.
+  const showOrders = spec.metric !== "order_count";
+  const showBase = rows.some((r) => r.base != null);
   return (
     <Shell>
       <thead>
         <tr>
           <th className={TH}>{chart.xLabel ?? "Group"}</th>
           <th className={THR}>{metricLabel}</th>
-          <th className={THR}>Orders</th>
-          <th className={THR}>Base</th>
+          {showOrders && <th className={THR}>Orders</th>}
+          {showBase && <th className={THR}>Base</th>}
         </tr>
       </thead>
       <tbody className="divide-y divide-line">
@@ -35,8 +38,8 @@ export function ResultTable({ result }: { result: QueryResult }) {
           <tr key={r.key}>
             <td className={TD}>{formatKey(r.key)}</td>
             <td className={TDR}>{formatMetric(r.value, spec.metric, isRate)}</td>
-            <td className={TDR}>{formatInt(r.orders)}</td>
-            <td className={TDR}>{r.base == null ? "—" : formatInt(r.base)}</td>
+            {showOrders && <td className={TDR}>{formatInt(r.orders)}</td>}
+            {showBase && <td className={TDR}>{r.base == null ? "—" : formatInt(r.base)}</td>}
           </tr>
         ))}
       </tbody>
