@@ -6,6 +6,7 @@ primary_region = "iad"
   AI_BASE_URL = "https://ai.sumopod.com/v1"
   AI_MODEL = "gpt-6-luna"
   AI_REASONING_EFFORT = "none"
+  AI_DAILY_LIMIT = "500"
 
 [http_service]
   internal_port = 3000

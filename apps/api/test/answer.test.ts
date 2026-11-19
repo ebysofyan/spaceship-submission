@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { runForecast, runQuery, type QuerySpec } from "@app/core";
 import { loadDataset } from "../src/data";
 import { interpretRules } from "../src/ai/rules";
-import { answerForecast, answerQuery, refusalAnswer } from "../src/ai/answer";
+import { answerForecast, answerQuery, describeSpec, refusalAnswer } from "../src/ai/answer";
 
 const { orders, meta } = await loadDataset();
 
@@ -119,6 +119,24 @@ describe("answer templates", () => {
 
   test("a bare carrier with no measure reads as its on-time rate", () => {
     expect(say("how is FedEx doing")).toBe("On-time rate for FedEx was 85.9% (73 of 85 orders) in 2025.");
+  });
+
+  test("LLM reasoning is described from the validated spec", () => {
+    expect(describeSpec({ metric: "delay_rate", groupBy: "carrier" }, meta)).toBe(
+      "Delay rate (delayed + exception) by carrier, all of 2025.",
+    );
+    expect(describeSpec({ metric: "delayed_count", timeGrain: "week", dateRange: { last: 3, unit: "month" } }, meta)).toBe(
+      "Delayed orders by week, 1 Sep – 30 Nov 2025.",
+    );
+    expect(describeSpec({ metric: "order_count", filters: { carrier: ["FedEx"] }, dateRange: { last: 1, unit: "month" } }, meta)).toBe(
+      "Orders, filtered to FedEx, November 2025.",
+    );
+    expect(describeSpec({ metric: "delay_rate", groupBy: "carrier", sort: "desc", limit: 3 }, meta)).toBe(
+      "Top 3 delay rate (delayed + exception) by carrier, all of 2025.",
+    );
+    expect(describeSpec({ target: { kind: "category", value: "PAINT" }, horizonMonths: 4 }, meta)).toBe(
+      "Forecast for category PAINT, 4 months.",
+    );
   });
 
   test("refusal sentence is fixed", () => {

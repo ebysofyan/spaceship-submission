@@ -1,6 +1,6 @@
 import { join, resolve, sep } from "node:path";
 import { runForecast, runQuery } from "@app/core";
-import { ask, InputError, type AiState } from "./ask";
+import { ask, dailyLimitReached, InputError, type AiState } from "./ask";
 import { aiConfigFromEnv, type AiConfig } from "./ai/llm";
 import { buildSchemas, parseForecast, parseQuery } from "./ai/schemas";
 import { loadDataset, type Dataset } from "./data";
@@ -51,19 +51,20 @@ function fixedWindow(max: number, windowMs: number) {
 export function createServer(dataset: Dataset, ai: AiConfig, port = 3000) {
   const { orders, meta, dashboard } = dataset;
   const schemas = buildSchemas(meta);
-  const state: AiState = { cache: new Map(), lastAttemptFailed: false };
+  const state: AiState = { cache: new Map(), lastAttemptFailed: false, usage: { day: "", calls: 0 } };
   const allowAsk = fixedWindow(20, 60_000);
 
   return Bun.serve({
     port,
+    // Questions are capped at 500 chars, so 16 KB is generous; bigger bodies are refused before they are read.
+    maxRequestBodySize: 16 * 1024,
     routes: {
       "/api/health": {
-        GET: () =>
-          json(
-            ai.apiKey
-              ? { ok: true, aiMode: "llm", model: ai.model, aiStatus: state.lastAttemptFailed ? "failing" : "ok" }
-              : { ok: true, aiMode: "rules" },
-          ),
+        GET: () => {
+          if (!ai.apiKey) return json({ ok: true, aiMode: "rules" });
+          const aiStatus = dailyLimitReached({ ai, state }) ? "limited" : state.lastAttemptFailed ? "failing" : "ok";
+          return json({ ok: true, aiMode: "llm", model: ai.model, aiStatus });
+        },
       },
       "/api/meta": { GET: () => json(meta) },
       "/api/dashboard": { GET: () => json(dashboard) },

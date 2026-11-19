@@ -1,4 +1,14 @@
-import type { Dimension, ForecastResult, ForecastSpec, Metric, QueryResult } from "@app/core";
+import {
+  METRIC_DEFS,
+  resolveRange,
+  type Dimension,
+  type ForecastResult,
+  type ForecastSpec,
+  type MetaResponse,
+  type Metric,
+  type QueryResult,
+  type QuerySpec,
+} from "@app/core";
 
 // Sentences are built from core results only. This file formats numbers, it never computes them.
 
@@ -215,6 +225,27 @@ export function answerForecast(f: ForecastResult): string {
 
 const targetName = (t: ForecastSpec["target"]) =>
   t.kind === "all" ? "all products" : t.kind === "sku" ? `SKU ${t.value}` : t.value;
+
+// Reasoning for an LLM interpretation, built from the validated spec: no model-written text reaches the browser.
+export function describeSpec(spec: QuerySpec | ForecastSpec, meta: MetaResponse): string {
+  if ("target" in spec) {
+    const t = spec.target;
+    const what = t.kind === "all" ? "all products" : t.kind === "sku" ? `SKU ${t.value}` : `category ${t.value}`;
+    return `Forecast for ${what}, ${plural(spec.horizonMonths, "month")}.`;
+  }
+  const top = spec.limit ? `${spec.sort === "asc" ? "bottom" : "top"} ${spec.limit} ` : "";
+  const by = spec.timeGrain ?? spec.groupBy;
+  const values = Object.values(spec.filters ?? {}).flatMap((v) => v ?? []);
+  const r = spec.dateRange ? resolveRange(spec.dateRange, meta.anchorDate) : null;
+  const period = !r
+    ? `all of ${meta.dateRange.from.slice(0, 4)}`
+    : isFullMonth(r) ? `${monthName(r.from)} ${r.from.slice(0, 4)}` : spanText(r);
+  return `${[
+    `${cap(top + METRIC_DEFS[spec.metric].label.toLowerCase())}${by ? ` by ${by.replace("_", " ")}` : ""}`,
+    values.length ? `filtered to ${values.join(", ")}` : "",
+    period,
+  ].filter(Boolean).join(", ")}.`;
+}
 
 // `reason` is one plain sentence from the rules or the core validator.
 export const refusalAnswer = (reason: string) => `I can't answer that from this data. ${reason}`;

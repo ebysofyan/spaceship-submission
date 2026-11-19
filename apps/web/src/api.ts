@@ -5,7 +5,7 @@ export interface Health {
   ok: boolean;
   aiMode: "llm" | "rules";
   model?: string;
-  aiStatus?: "ok" | "failing";
+  aiStatus?: "ok" | "failing" | "limited";
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

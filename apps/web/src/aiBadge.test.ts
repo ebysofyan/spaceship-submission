@@ -21,6 +21,15 @@ describe("aiBadge", () => {
     expect(badge).toEqual({ label: "AI fallback", tone: "warn", title: "The AI model is unavailable; using keyword matching" });
   });
 
+  test("llm and limited shows a warn AI limit reached until tomorrow", () => {
+    const badge = aiBadge(state({ ok: true, aiMode: "llm", model: "m", aiStatus: "limited" }));
+    expect(badge).toEqual({
+      label: "AI limit reached",
+      tone: "warn",
+      title: "Daily AI budget used up; using keyword matching until tomorrow (UTC)",
+    });
+  });
+
   test("rules shows keyword mode", () => {
     expect(aiBadge(state({ ok: true, aiMode: "rules" })).label).toBe("Keyword mode");
   });

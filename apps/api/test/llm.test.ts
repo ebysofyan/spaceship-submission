@@ -7,13 +7,20 @@ const { meta } = await loadDataset();
 const schemas = buildSchemas(meta);
 
 describe("aiConfigFromEnv", () => {
-  test("defaults to the SumoPod gpt-6-luna model with reasoning_effort none", () => {
+  test("defaults to the SumoPod gpt-6-luna model with reasoning_effort none and a 500-call daily limit", () => {
     expect(aiConfigFromEnv({})).toEqual({
       apiKey: undefined,
       baseUrl: "https://ai.sumopod.com/v1",
       model: "gpt-6-luna",
       reasoningEffort: "none",
+      dailyLimit: 500,
     });
+  });
+
+  test("AI_DAILY_LIMIT is read as a number; 0 is kept, garbage falls back to the default", () => {
+    expect(aiConfigFromEnv({ AI_DAILY_LIMIT: "0" }).dailyLimit).toBe(0);
+    expect(aiConfigFromEnv({ AI_DAILY_LIMIT: "25" }).dailyLimit).toBe(25);
+    expect(aiConfigFromEnv({ AI_DAILY_LIMIT: "lots" }).dailyLimit).toBe(500);
   });
 
   test("an explicitly empty AI_REASONING_EFFORT is kept as empty, meaning don't send", () => {
@@ -33,7 +40,7 @@ describe("LLM request", () => {
         choices: [
           {
             message: {
-              tool_calls: [{ function: { name: "refuse", arguments: JSON.stringify({ reasoning: "off topic" }) } }],
+              tool_calls: [{ function: { name: "refuse", arguments: JSON.stringify({ reasoning: "Revenue was $9,500,000" }) } }],
             },
           },
         ],
@@ -52,6 +59,22 @@ describe("LLM request", () => {
 
     await interpretWithLlm("weather?", meta, schemas, ai(""));
     expect(bodies[1]).not.toHaveProperty("reasoning_effort");
+  });
+
+  test("caps output tokens and asks the model for no free text", async () => {
+    await interpretWithLlm("weather?", meta, schemas, ai());
+    expect(bodies[0].max_tokens).toBe(300);
+    expect(JSON.stringify(bodies[0].tools)).not.toContain("reasoning");
+    expect(bodies[0].messages[0].content).not.toContain("reasoning");
+  });
+
+  test("a refuse call gets the fixed sentence, whatever text the model put in", async () => {
+    const r = await interpretWithLlm("weather?", meta, schemas, ai());
+    expect(r).toEqual({
+      tool: "unsupported",
+      source: "llm",
+      reasoning: "That question is outside what this order data can answer.",
+    });
   });
 
   test("large enums are trimmed to a format hint; small enums stay", () => {

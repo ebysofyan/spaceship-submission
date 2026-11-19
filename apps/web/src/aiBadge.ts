@@ -13,6 +13,9 @@ export function aiBadge({ data, error }: AsyncState<Health>): AiBadge {
   if (error) return { label: "API offline", tone: "warn" };
   if (!data) return { label: "Checking…", tone: "neutral" };
   if (data.aiMode === "llm") {
+    if (data.aiStatus === "limited") {
+      return { label: "AI limit reached", tone: "warn", title: "Daily AI budget used up; using keyword matching until tomorrow (UTC)" };
+    }
     if (data.aiStatus === "failing") {
       return { label: "AI fallback", tone: "warn", title: "The AI model is unavailable; using keyword matching" };
     }

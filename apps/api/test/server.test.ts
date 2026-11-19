@@ -30,7 +30,7 @@ const post = (path: string, body: unknown, origin = base) =>
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
 
-const freshState = (): AiState => ({ cache: new Map(), lastAttemptFailed: false });
+const freshState = (): AiState => ({ cache: new Map(), lastAttemptFailed: false, usage: { day: "", calls: 0 } });
 
 describe("http api", () => {
   test("health reports rules mode without a key", async () => {
@@ -87,6 +87,15 @@ describe("http api", () => {
     expect((await jsonOf(res)).forecast).toHaveLength(4);
   });
 
+  test("a body over 16 KB is refused, even when its question is valid", async () => {
+    // Without the cap this would be a 200: the question is fine, only the padding is big.
+    const status = await post("/api/ask", { question: "Which carrier has the highest delay rate?", pad: "x".repeat(100_000) }).then(
+      (r) => r.status,
+      () => 0, // connection closed by the server
+    );
+    expect(status).not.toBe(200);
+  });
+
   test("unknown api route is a JSON 404", async () => {
     expect((await fetch(`${base}/api/nope`)).status).toBe(404);
   });
@@ -110,19 +119,23 @@ describe("schemas", () => {
 
   test("tool parameter schemas export for the LLM", () => {
     const [query, forecast] = toolDefinitions(schemas);
-    expect(query.function.parameters.required).toContain("reasoning");
-    expect(forecast.function.parameters.required).toContain("reasoning");
+    for (const tool of [query, forecast]) {
+      const params = tool!.function.parameters as any;
+      expect(params.properties).not.toHaveProperty("reasoning");
+      expect(params.required ?? []).not.toContain("reasoning");
+    }
   });
 });
 
 describe("LLM path", () => {
   // Stub OpenAI-compatible endpoint, so the tests never touch the network.
   const stub = (handler: (req: Request) => Response) => Bun.serve({ port: 0, fetch: handler });
-  const reply = (args: object) =>
+  const callReply = (name: string, args: object) =>
     Response.json({
-      choices: [{ message: { tool_calls: [{ function: { name: "run_query", arguments: JSON.stringify(args) } }] } }],
+      choices: [{ message: { tool_calls: [{ function: { name, arguments: JSON.stringify(args) } }] } }],
     });
-  const CARRIER = { reasoning: "carrier ranking", metric: "delay_rate", groupBy: "carrier" };
+  const reply = (args: object) => callReply("run_query", args);
+  const CARRIER = { metric: "delay_rate", groupBy: "carrier" };
   const QUESTION = "Which carrier has the highest delay rate?";
   const deps = (ai: AiConfig) => ({ meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai, state: freshState() });
 
@@ -131,8 +144,69 @@ describe("LLM path", () => {
     try {
       const ai = { apiKey: "test-key", baseUrl: `http://localhost:${srv.port}`, model: "test" };
       const r = await interpret(QUESTION, deps(ai));
-      expect(r).toMatchObject({ tool: "query", source: "llm", reasoning: "carrier ranking", args: { metric: "delay_rate", groupBy: "carrier" } });
+      expect(r).toMatchObject({
+        tool: "query",
+        source: "llm",
+        reasoning: "Delay rate (delayed + exception) by carrier, all of 2025.",
+        args: { metric: "delay_rate", groupBy: "carrier" },
+      });
     } finally {
+      srv.stop(true);
+    }
+  });
+
+  test("model free text never reaches the response: an extra reasoning key is ignored, a refusal gets the fixed sentence", async () => {
+    const srv = stub(() => reply({ ...CARRIER, reasoning: "Revenue was $9,500,000" }));
+    const refuse = stub(() => callReply("refuse", { reasoning: "Total revenue was $9,500,000." }));
+    const keyed = createServer(dataset, { apiKey: "k", baseUrl: `http://localhost:${srv.port}`, model: "test" }, 0);
+    const refusing = createServer(dataset, { apiKey: "k", baseUrl: `http://localhost:${refuse.port}`, model: "test" }, 0);
+    try {
+      const query = await jsonOf(await post("/api/ask", { question: QUESTION }, `http://localhost:${keyed.port}`));
+      expect(query.interpretation).toMatchObject({ tool: "query", source: "llm" });
+      expect(JSON.stringify(query)).not.toContain("9,500,000");
+
+      const res = await post("/api/ask", { question: "What was total revenue?" }, `http://localhost:${refusing.port}`);
+      const body = await jsonOf(res);
+      expect(body.interpretation).toEqual({
+        tool: "unsupported",
+        source: "llm",
+        reasoning: "That question is outside what this order data can answer.",
+      });
+      expect(body.answer).toBe("I can't answer that from this data. That question is outside what this order data can answer.");
+      expect(JSON.stringify(body)).not.toContain("9,500,000");
+    } finally {
+      keyed.stop(true);
+      refusing.stop(true);
+      srv.stop(true);
+      refuse.stop(true);
+    }
+  });
+
+  test("after AI_DAILY_LIMIT LLM calls, questions use rules, no call is made, and health says limited", async () => {
+    let calls = 0;
+    const srv = stub(() => {
+      calls++;
+      return reply(CARRIER);
+    });
+    const keyed = createServer(dataset, { apiKey: "k", baseUrl: `http://localhost:${srv.port}`, model: "test", dailyLimit: 2 }, 0);
+    const origin = `http://localhost:${keyed.port}`;
+    try {
+      expect((await jsonOf(await post("/api/ask", { question: QUESTION }, origin))).interpretation.source).toBe("llm");
+      expect(await jsonOf(await fetch(`${origin}/api/health`))).toMatchObject({ aiStatus: "ok" });
+      expect((await jsonOf(await post("/api/ask", { question: "How many orders by region?" }, origin))).interpretation.source).toBe("llm");
+      expect(await jsonOf(await fetch(`${origin}/api/health`))).toMatchObject({ aiStatus: "limited" });
+
+      const limited = await jsonOf(await post("/api/ask", { question: "How many orders by carrier?" }, origin));
+      expect(limited.interpretation.source).toBe("rules");
+      expect(limited.interpretation.reasoning).toEndWith(" (Daily AI limit reached, used keyword matching.)");
+      expect(calls).toBe(2);
+      expect(await jsonOf(await fetch(`${origin}/api/health`))).toEqual({ ok: true, aiMode: "llm", model: "test", aiStatus: "limited" });
+
+      // Cached answers are still served; they never reached the LLM today.
+      expect((await jsonOf(await post("/api/ask", { question: QUESTION }, origin))).interpretation.source).toBe("llm");
+      expect(calls).toBe(2);
+    } finally {
+      keyed.stop(true);
       srv.stop(true);
     }
   });

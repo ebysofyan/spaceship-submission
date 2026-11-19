@@ -15,3 +15,5 @@ services:
         value: gpt-6-luna
       - key: AI_REASONING_EFFORT
         value: none
+      - key: AI_DAILY_LIMIT
+        value: "500"

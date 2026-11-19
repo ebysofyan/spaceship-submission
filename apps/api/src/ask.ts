@@ -8,7 +8,7 @@ import {
   type Order,
   type Status,
 } from "@app/core";
-import { interpretWithLlm, type AiConfig } from "./ai/llm";
+import { DEFAULT_DAILY_LIMIT, interpretWithLlm, type AiConfig } from "./ai/llm";
 import { interpretRules } from "./ai/rules";
 import { answerForecast, answerQuery, refusalAnswer } from "./ai/answer";
 import type { Schemas } from "./ai/schemas";
@@ -23,6 +23,7 @@ const CACHE_LIMIT = 500;
 export interface AiState {
   cache: Map<string, Interpretation>;
   lastAttemptFailed: boolean;
+  usage: { day: string; calls: number }; // LLM calls sent on one UTC day
 }
 
 export interface AskDeps {
@@ -59,6 +60,16 @@ export function tidyQuery(i: Interpretation): Interpretation {
   };
 }
 
+// shortcut: the counter lives in this process and resets on restart; move it to a shared store if we run several instances.
+export function todayUsage(state: AiState): AiState["usage"] {
+  const day = new Date().toISOString().slice(0, 10);
+  if (state.usage.day !== day) state.usage = { day, calls: 0 };
+  return state.usage;
+}
+
+export const dailyLimitReached = (deps: Pick<AskDeps, "ai" | "state">) =>
+  todayUsage(deps.state).calls >= (deps.ai.dailyLimit ?? DEFAULT_DAILY_LIMIT);
+
 // One reasoning string per interpretation. It is user-visible, so it stays in plain English.
 export async function interpret(
   question: string,
@@ -70,6 +81,11 @@ export async function interpret(
   const key = question.trim().toLowerCase();
   const cached = cache.get(key);
   if (cached) return cached;
+  if (dailyLimitReached(deps)) {
+    const rules = interpretRules(question, deps.meta);
+    return { ...rules, reasoning: `${rules.reasoning} (Daily AI limit reached, used keyword matching.)` };
+  }
+  todayUsage(deps.state).calls++;
   try {
     const llm = tidyQuery(await interpretWithLlm(question, deps.meta, deps.schemas, deps.ai));
     deps.state.lastAttemptFailed = false;
