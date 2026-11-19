@@ -33,7 +33,7 @@ export function AnswerCard({
   const parts = query ? queryParts(query) : forecast ? forecastParts(forecast) : [toolLabel(interpretation.tool)];
 
   return (
-    <Card className="space-y-6 p-5 sm:p-6">
+    <Card className="motion-safe:animate-answer-in space-y-6 p-5 sm:p-6">
       <div>
         <p className="text-sm text-muted">{response.question}</p>
         <p className="mt-2 text-lg leading-relaxed text-ink sm:text-xl">{response.answer}</p>

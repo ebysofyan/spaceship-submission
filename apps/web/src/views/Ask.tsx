@@ -12,14 +12,15 @@ import { sourceLabel, toolLabel } from "../format";
 
 interface Entry {
   id: number;
-  response: AskResponse;
+  question: string;
+  response?: AskResponse; // undefined while the answer is computed
 }
 
 export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () => void }) {
   const [draft, setDraft] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]); // newest first
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState<string | null>(null); // question in flight; guards double-submit
   const [failed, setFailed] = useState<{ question: string; message: string } | null>(null);
   const [showExamples, setShowExamples] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -28,25 +29,27 @@ export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () =
   async function submit(question: string) {
     const q = question.trim();
     if (!q || pending) return;
+    const id = nextId.current++;
     setDraft(q);
-    setPending(true);
+    setPending(q);
     setFailed(null);
+    setEntries((prev) => [{ id, question: q }, ...prev]); // optimistic history entry
+    setSelectedId(id);
     try {
       const response = await ask(q);
-      const id = nextId.current++;
-      setEntries((prev) => [{ id, response }, ...prev]);
-      setSelectedId(id);
+      setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, response } : e)));
       inputRef.current?.focus();
     } catch (e) {
+      setEntries((prev) => prev.filter((e) => e.id !== id));
       setFailed({ question: q, message: errorMessage(e) });
     } finally {
-      setPending(false);
+      setPending(null);
       onAnswered();
     }
   }
 
   const selected = entries.find((e) => e.id === selectedId);
-  const hasAnswer = entries.length > 0;
+  const hasAnswer = entries.some((e) => e.response);
   const showChips = !hasAnswer || showExamples;
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -56,7 +59,7 @@ export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () =
   const chips = showChips && (
     <div className="flex flex-wrap gap-2">
       {meta.examples.map((ex) => (
-        <Chip key={ex} onClick={() => void submit(ex)} disabled={pending}>
+        <Chip key={ex} onClick={() => void submit(ex)} disabled={!!pending}>
           {ex}
         </Chip>
       ))}
@@ -68,7 +71,7 @@ export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () =
       <p className="p-5 text-sm text-muted">Questions you ask this session will be listed here.</p>
     ) : (
       <ul className="max-h-[70vh] space-y-1 overflow-y-auto p-2">
-        {entries.map(({ id, response }) => (
+        {entries.map(({ id, question, response }) => (
           <li key={id}>
             <button
               type="button"
@@ -78,9 +81,11 @@ export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () =
                 id === selectedId ? "bg-brand-50" : "hover:bg-subtle"
               }`}
             >
-              <span className="line-clamp-2 block text-sm text-ink">{response.question}</span>
+              <span className="line-clamp-2 block text-sm text-ink">{question}</span>
               <span className="mt-1 block text-xs text-muted">
-                {toolLabel(response.interpretation.tool)} · {sourceLabel(response.interpretation.source)}
+                {response
+                  ? `${toolLabel(response.interpretation.tool)} · ${sourceLabel(response.interpretation.source)}`
+                  : "Working…"}
               </span>
             </button>
           </li>
@@ -113,7 +118,7 @@ export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () =
                 className="pl-9"
               />
             </div>
-            <Button type="submit" disabled={pending || !draft.trim()}>
+            <Button type="submit" disabled={!!pending || !draft.trim()}>
               {pending ? <Loader2 className="animate-spin" size={16} aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
               Ask
             </Button>
@@ -133,10 +138,10 @@ export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () =
         </section>
 
         {pending ? (
-          <Working />
+          <Pending question={pending} />
         ) : failed ? (
           <ErrorState message={failed.message} onRetry={() => void submit(failed.question)} />
-        ) : selected ? (
+        ) : selected?.response ? (
           <AnswerCard key={selected.id} response={selected.response} examples={meta.examples} onAsk={(q) => void submit(q)} />
         ) : (
           <EmptyState>Ask a question to get started. Answers and the reasoning behind them appear here.</EmptyState>
@@ -164,17 +169,33 @@ export function Ask({ meta, onAnswered }: { meta: MetaResponse; onAnswered: () =
   );
 }
 
-function Working() {
+// Shown from submit until the answer arrives, in the AnswerCard layout. The steps are static: the API
+// returns one response and reports no progress, so only the first step is marked active.
+export function Pending({ question }: { question: string }) {
   return (
-    <Card className="p-5 sm:p-6">
-      <div role="status" className="flex items-center gap-3 text-sm text-body">
-        <Loader2 className="animate-spin text-brand-700" size={18} aria-hidden="true" />
-        Working out the answer…
+    <Card className="space-y-6 p-5 sm:p-6">
+      <div>
+        <p className="text-sm text-muted">{question}</p>
+        <ul role="status" aria-live="polite" className="mt-3 space-y-2 text-sm">
+          <Step active label="Understanding the question" />
+          <Step label="Running the query" />
+          <Step label="Building the chart" />
+        </ul>
       </div>
-      <div className="mt-5 space-y-3" aria-hidden="true">
-        <Skeleton className="h-6 w-3/4" />
-        <Skeleton className="h-48 w-full" />
-      </div>
+      <Skeleton className="h-48 w-full" />
     </Card>
+  );
+}
+
+function Step({ active = false, label }: { active?: boolean; label: string }) {
+  return (
+    <li className={`flex items-center gap-2 ${active ? "text-ink" : "text-muted"}`}>
+      {active ? (
+        <Loader2 className="animate-spin text-brand-700" size={14} aria-hidden="true" />
+      ) : (
+        <span className="mx-1 size-1.5 rounded-full bg-faint" aria-hidden="true" />
+      )}
+      {label}
+    </li>
   );
 }
