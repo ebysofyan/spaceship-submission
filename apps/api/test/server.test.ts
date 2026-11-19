@@ -258,13 +258,15 @@ describe("LLM path", () => {
     }
   });
 
-  test("an invalid tool call falls back to rules and says why", async () => {
+  test("an invalid tool call falls back to rules, says why, and is not an outage", async () => {
     const srv = stub(() => reply({ reasoning: "x", metric: "bogus" }));
     try {
       const ai = { apiKey: "test-key", baseUrl: `http://localhost:${srv.port}`, model: "test" };
-      const r = await interpret(QUESTION, deps(ai));
+      const d = deps(ai);
+      const r = await interpret(QUESTION, d);
       expect(r.source).toBe("rules");
-      expect(r.reasoning).toBe("Matched “delay rate”, grouped by carrier. (AI unavailable, used keyword matching.)");
+      expect(r.reasoning).toBe("Matched “delay rate”, grouped by carrier. (AI reading failed validation, used keyword matching.)");
+      expect(d.state.lastAttemptFailed).toBe(false);
     } finally {
       srv.stop(true);
     }
@@ -274,9 +276,11 @@ describe("LLM path", () => {
     const srv = stub(() => new Response("nope", { status: 500 }));
     try {
       const ai = { apiKey: "test-key", baseUrl: `http://localhost:${srv.port}`, model: "test" };
-      const r = await interpret(QUESTION, deps(ai));
+      const d = deps(ai);
+      const r = await interpret(QUESTION, d);
       expect(r).toMatchObject({ tool: "query", source: "rules" });
       expect(r.reasoning).toEndWith("(AI unavailable, used keyword matching.)");
+      expect(d.state.lastAttemptFailed).toBe(true);
     } finally {
       srv.stop(true);
     }

@@ -8,7 +8,7 @@ import {
   type Order,
   type Status,
 } from "@app/core";
-import { DEFAULT_DAILY_LIMIT, DEFAULT_IP_DAILY_LIMIT, interpretWithLlm, type AiConfig } from "./ai/llm";
+import { DEFAULT_DAILY_LIMIT, DEFAULT_IP_DAILY_LIMIT, interpretWithLlm, InvalidToolCall, type AiConfig } from "./ai/llm";
 import { interpretRules } from "./ai/rules";
 import { answerForecast, answerQuery, refusalAnswer } from "./ai/answer";
 import type { Schemas } from "./ai/schemas";
@@ -115,10 +115,13 @@ export async function interpret(
     cache.set(key, llm);
     return llm;
   } catch (e) {
-    deps.state.lastAttemptFailed = true;
+    // A rejected reading (e.g. an invented SKU) is not an outage: the header stays "AI on".
+    const rejected = e instanceof InvalidToolCall;
+    deps.state.lastAttemptFailed = !rejected;
     console.warn("LLM interpreter failed, using keyword matching:", e);
     const rules = interpretRules(question, deps.meta);
-    return { ...rules, reasoning: `${rules.reasoning} (AI unavailable, used keyword matching.)` };
+    const why = rejected ? "AI reading failed validation" : "AI unavailable";
+    return { ...rules, reasoning: `${rules.reasoning} (${why}, used keyword matching.)` };
   }
 }
 

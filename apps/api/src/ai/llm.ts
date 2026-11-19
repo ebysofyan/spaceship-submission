@@ -123,7 +123,10 @@ export function toolDefinitions(schemas: Schemas) {
   ];
 }
 
-// Throws on anything unexpected; the caller falls back to rules and records why.
+// The model replied, but its arguments failed validation: the AI is up, its reading was rejected.
+export class InvalidToolCall extends Error {}
+
+// Throws InvalidToolCall on any bad call; the caller falls back to rules and records why.
 function fromToolCall(call: ToolCall, schemas: Schemas, meta: MetaResponse): Interpretation {
   let args: unknown;
   try {
@@ -187,5 +190,9 @@ export async function interpretWithLlm(
   if (body.usage?.prompt_tokens !== undefined) onPromptTokens?.(body.usage.prompt_tokens);
   const call = body.choices?.[0]?.message?.tool_calls?.[0]?.function;
   if (!call) throw new Error("no tool call in reply");
-  return fromToolCall(call, schemas, meta);
+  try {
+    return fromToolCall(call, schemas, meta);
+  } catch (e) {
+    throw new InvalidToolCall(e instanceof Error ? e.message : String(e));
+  }
 }
