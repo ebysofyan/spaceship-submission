@@ -29,6 +29,7 @@ To use the LLM router, copy `.env.example` to `.env` (git-ignored) and set `AI_A
 | `AI_BASE_URL` | `https://ai.sumopod.com/v1` | Any OpenAI-compatible endpoint that supports tool calls. |
 | `AI_MODEL` | `gpt-6-luna` | Model name sent to `AI_BASE_URL`. `glm-5.3-flash` is the cheaper, slower alternative. |
 | `AI_REASONING_EFFORT` | `none` | Sent as `reasoning_effort`. `gpt-6-luna` rejects tool calls without `none`. Empty = not sent. |
+| `AI_DAILY_LIMIT` | `500` | LLM calls per UTC day. After that, questions use keyword matching and make no LLM call. `0` turns the LLM off. Counter is per process. |
 | `PORT` | `3000` | HTTP port. Keep it at 3000 for `bun run dev`, because the Vite proxy targets it. |
 | `DATA_PATH` | `data/mock_logistics_data.csv` | CSV loaded at boot. |
 
@@ -77,7 +78,7 @@ apps/web/src       Vite + React SPA: views Dashboard, Ask, Forecast
 - **Structured queries, not SQL.** The interpreter produces a typed spec: an allow-listed metric, dimension, grain, filters and date range. No SQL is generated or run.
 - **Zod is the trust boundary.** Allowed values come from the loaded data, objects are strict, and unknown keys are rejected. Core validates again, so the API routes get the same checks.
 - **Metrics are defined once.** `metrics.ts` feeds the KPIs, the query tool, the chart labels and the explanations, so they cannot disagree.
-- **The AI never answers.** Answer sentences are templates over core results. No model output reaches a number.
+- **The AI never answers.** Answer sentences are templates over core results. No model text reaches the screen, and every number comes from core.
 - **No database, no HTTP framework.** 400 read-only rows fit in memory. `Bun.serve({ routes })` covers five endpoints plus static files.
 - **Vite SPA, not Next.js.** One page with client-side tabs; no server rendering or SEO need.
 
@@ -87,7 +88,7 @@ apps/web/src       Vite + React SPA: views Dashboard, Ask, Forecast
 2. `interpret()` (`ask.ts`) uses the LLM tool call when `AI_API_KEY` is set, otherwise the rules router. Either way it returns `query`, `forecast` or `unsupported`.
 3. The spec is validated with zod (`ai/schemas.ts`). Core validates it again.
 4. `runQuery` or `runForecast` computes over the in-memory orders. `ai/answer.ts` writes the sentence.
-5. The response carries the interpretation, result, rows and notes. The UI shows the answer, a chart picked from the result shape (`DynamicChart`), and a Details panel.
+5. The response carries the interpretation, result, rows and notes. The UI shows the answer, a chart picked from the result shape (`DynamicChart`), and a Details panel. While the request is in flight, a progress card (three static steps; the API reports no progress) and a history entry appear at once.
 
 The dashboard skips steps 1–3: `GET /api/dashboard` returns `getDashboard(orders)`, computed once at boot.
 
@@ -97,15 +98,15 @@ The dashboard skips steps 1–3: `GET /api/dashboard` returns `getDashboard(orde
 
 ### How tools are selected (LLM path)
 
-- `llm.ts` calls `/chat/completions` with `temperature: 0`, `tool_choice: "required"` and a 15 s timeout.
-- Three tools: `run_query`, `run_forecast`, `refuse`. Their parameter schemas are generated from the zod schemas that validate the reply (`z.toJSONSchema`), so they cannot drift apart. Each call also has a one-sentence `reasoning`, which the UI shows.
+- `llm.ts` calls `/chat/completions` with `temperature: 0`, `tool_choice: "required"`, `max_tokens: 300` and a 15 s timeout.
+- Three tools: `run_query`, `run_forecast`, `refuse`. Their parameter schemas are generated from the zod schemas that validate the reply (`z.toJSONSchema`), so they cannot drift apart. The reasoning shown to users is built by the server from the validated arguments. Any `reasoning` text the model returns is dropped.
 - The system prompt lists the metric definitions, dimensions, allowed values, the anchor date, and rules for ranges, grouping and status filters.
 - Enums with more than 20 values (SKUs, cities, client IDs) are not sent; the prompt gives an example instead. One measured question went from 7,990 prompt tokens (glm, untrimmed schema) to about 1,970 on glm, or about 1,570 on gpt-6-luna. zod still enforces the full allow-list on the reply.
 - Any failure (HTTP error, timeout, no tool call, invalid arguments) falls back to the rules router. The reasoning then ends "(AI unavailable, used keyword matching.)", and the header badge shows **AI fallback** until the next successful call.
 - `tidyQuery` removes a status filter that restates the metric (`delayed_count` with status delayed) and a limit of 1.
 - Successful LLM interpretations are cached in memory per server instance, keyed by the trimmed, lower-cased question (500 entries, oldest dropped). Rules results and failures are not cached.
-- `/api/ask` is rate-limited to 20 requests per minute per client IP, **only when a key is set**. Behind Fly, the client IP comes from `fly-client-ip`.
-- `/api/health` reports `{ aiMode: "llm", model, aiStatus: "ok" | "failing" }`, or `{ aiMode: "rules" }` without a key.
+- `/api/ask` is rate-limited to 20 requests per minute per client IP, **only when a key is set**. Behind Fly, the client IP comes from `fly-client-ip`. LLM calls are also capped per UTC day by `AI_DAILY_LIMIT`.
+- `/api/health` reports `{ aiMode: "llm", model, aiStatus: "ok" | "failing" | "limited" }`, or `{ aiMode: "rules" }` without a key.
 
 ### How tools are selected (rules path)
 
@@ -209,7 +210,7 @@ Delivery base = `delivered + delayed + exception` (370 orders). In-transit and c
 - **Fixed metric set** of nine. No free-form SQL and no custom metrics.
 - **LLM quality is measured on 12 questions only.** The eval script costs money to run and is not part of `bun test`. Results can change with the model.
 - **Data is in memory and loaded at boot.** A changed CSV needs a restart.
-- **No authentication; query history is per browser session only.** Anyone with the URL can call the API. The only rate limit is on `/api/ask` in LLM mode. It is in memory, per process, and resets on restart.
+- **No authentication; query history lasts for one page load.** Anyone with the URL can call the API. The only limits are on `/api/ask` in LLM mode (20 a minute per IP, and the daily cap). They are in memory, per process, and reset on restart.
 
 ## Future improvements
 
@@ -222,13 +223,24 @@ Delivery base = `delivered + delayed + exception` (370 orders). In-transit and c
 
 ## Testing
 
-`bun test` runs every workspace: **144 tests in 11 files** at the time of writing. The command prints the current count.
+`bun test` runs every workspace: **154 tests in 12 files** at the time of writing. The command prints the current count.
 
 - **Core** (`packages/core/test`): CSV parsing and lead time; query filters, ranges, buckets, charts and notes; forecast selection, safety stock and warnings; dashboard values against `docs/dataset.md` (400 / 304 / 55 / 370 / 82.2% / 3.83 days / 34.24 / 1310 units).
 - **API** (`apps/api/test`): rules examples and refusals; LLM tool-call handling, including invalid calls and HTTP errors falling back to rules (stubbed endpoint); answer templates; routes, 400 errors, and `/api/ask` end to end.
-- **Web** (`apps/web/src`): header AI badge states, formatting helpers, and the dashboard data tables.
+- **Web** (`apps/web/src`): header AI badge states, formatting helpers, the dashboard data tables, and the Ask progress card.
 
 Not automated: a live LLM call (use `eval-llm.ts`) and the browser UI.
+
+## Security
+
+Public, read-only and unauthenticated by design. The threat model and checklist are in [docs/SECURITY.md](docs/SECURITY.md).
+
+- **Prompt injection:** the model picks one of three tools and its arguments; strict zod allow-lists check them. Model text is never shown; the server builds the explanation.
+- **No SQL:** questions become typed specs that pure functions in `packages/core` run. There is nothing to inject into.
+- **Cost:** 20 asks a minute per IP, `AI_DAILY_LIMIT` LLM calls a UTC day, `max_tokens` 300, a 500-character question cap, an interpretation cache, and a free keyword fallback.
+- **Payloads and errors:** 16 KB body cap. Unexpected errors return `Internal error`; details go to the server log only.
+- **Secrets:** `AI_API_KEY` is read from the server environment (a Fly secret). `.env` is git-ignored and not in the Docker image.
+- **Limits:** counters are in memory and per process. IP rotation can use up the daily cap, which bounds cost, not availability. No CSP or extra security headers are set.
 
 ## Deployment
 

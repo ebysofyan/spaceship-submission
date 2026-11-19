@@ -155,18 +155,24 @@ Do not let any of these delay the graded core.
 
 ## 14. Definition of done
 
-Checklist an implementation can be verified against:
+Checklist an implementation can be verified against. Pointers are to files, tests, or output in
+`docs/EVIDENCE.md`. Rendering was checked by the coordinator on the live URL (EVIDENCE §Browser).
 
-- [ ] Deployed URL loads with no local setup and no missing env vars.
-- [ ] Dashboard renders all five KPIs and at least two charts from real data.
-- [ ] Each of the three example questions returns a computed answer, and the two
-      aggregation questions also return a chart.
-- [ ] Every answer shows filters, metrics, dimensions, the structured interpretation, and
-      the underlying rows.
-- [ ] No number in the UI originates from model text; every value traces to a tool result.
-- [ ] Invalid or unanswerable questions produce an explicit refusal naming what is
-      supported, not an invented answer.
-- [ ] Forecast for a SKU (or category) returns values, historical+forecast chart,
-      inventory recommendation, and methodology text.
-- [ ] Aggregate KPI figures match the reference values in `dataset.md`.
-- [ ] README covers all six required sections and discloses AI usage.
+- [x] Deployed URL loads with no local setup and no missing env vars. — evidence: `curl https://spaceship-logistics-eby.fly.dev/` → HTTP 200 and `/api/health` → `{"ok":true,"aiMode":"llm",...}` (EVIDENCE §1); a clean clone runs `bun install --frozen-lockfile && bun run build && bun run start` and serves `/api/health` → `{"ok":true,"aiMode":"rules"}` with no env set (EVIDENCE §1b).
+- [x] Dashboard renders all five KPIs and at least two charts from real data. — evidence: `apps/web/src/views/Dashboard.tsx` (`KpiGrid`: 5 KPIs; four `ChartCard`s), `/api/dashboard` KPIs (EVIDENCE §2), `packages/core/test/dashboard.test.ts` "KPIs match dataset.md". Browser: EVIDENCE §Browser.
+- [x] Each of the three example questions returns a computed answer, and the two aggregation questions also return a chart. — evidence: rules-mode run on `be50548` (EVIDENCE §3): weekly delayed → line chart; carrier delay rate → bar chart; late last month → KPI. Tests: `apps/api/test/rules.test.ts` "delayed orders by week for the last 3 months", "highest delay rate by carrier", "late orders last month".
+- [x] Every answer shows filters, metrics, dimensions, the structured interpretation, and the underlying rows. — evidence: `apps/web/src/views/AskAnswer.tsx` (badges: metric · grouping · range · filters; Details: reasoning, definition, JSON spec, result table, orders in scope). Forecast answers show target, horizon, method and the forecast table. Browser: EVIDENCE §Browser.
+- [x] No number in the UI originates from model text; every value traces to a tool result. — evidence: `apps/api/src/ai/llm.ts` (`fromToolCall` drops model `reasoning`; refusal sentence is fixed), `apps/api/src/ai/answer.ts` (text built from core results); tests `apps/api/test/server.test.ts` "model free text never reaches the response…", `apps/api/test/llm.test.ts` "a refuse call gets the fixed sentence…"; live injection check in EVIDENCE §Security checks.
+- [x] Invalid or unanswerable questions produce an explicit refusal naming what is supported, not an invented answer. — evidence: `apps/api/src/ask.ts` (`refuse` returns `supported: meta.examples`), `AskAnswer.tsx` `Refusal` (lists supported questions); test `server.test.ts` "ask refuses off-topic questions with status 200 and supported examples"; refusals in EVIDENCE §6.
+- [x] Forecast for a SKU (or category) returns values, historical+forecast chart, inventory recommendation, and methodology text. — evidence: `packages/core/test/forecast.test.ts` ("forecast length equals horizon…", "recommended inventory covers forecast units"); `apps/web/src/components/ForecastChart.tsx` (history solid, forecast dashed, band); `apps/web/src/views/Forecast.tsx` ("Recommended inventory", "Methodology"). Browser: EVIDENCE §Browser.
+- [x] Aggregate KPI figures match the reference values in `dataset.md`. — evidence: `packages/core/test/dashboard.test.ts` "KPIs match dataset.md" (400 / 304 / 55 / 370 / 82.2% / 3.83 days); `bun test` 154 pass (EVIDENCE §Test).
+- [x] README covers all six required sections and discloses AI usage. — evidence: `README.md` headings Setup, Architecture, AI approach, Assumptions, Limitations, Future improvements, and "AI usage disclosure" (`grep -n "^## " README.md`).
+
+### Bonus (§12 items)
+
+- [x] Query history — done: the Ask list keeps this page load's questions, newest first, and adds an entry before the answer arrives. Not persisted: a reload clears it. — evidence: `apps/web/src/views/Ask.tsx` (`entries`, "optimistic history entry").
+- [x] Caching — done: successful LLM interpretations are cached per process (500 entries, key = trimmed, lower-cased question); rules results and failures are not cached. — evidence: `apps/api/src/ask.ts` (`cache`, `CACHE_LIMIT`); test `apps/api/test/server.test.ts` "a repeated question (any case or spacing) makes no second LLM call".
+- [x] Tests — done: 154 tests in 12 files (core, api, web). — evidence: `bun test` tail in EVIDENCE §Test.
+- [x] Docker setup — done: `Dockerfile` (two stages, runs as `bun`) and `.dockerignore`. The live image was built by Fly's remote builder (EVIDENCE §0); a clean clone builds and starts from the same steps (EVIDENCE §1b). Not done: a local `docker build` was not re-run (daemon not running).
+- [x] Advanced explainability — done: Details panel (reasoning, definition, JSON spec, result table, orders in scope) and "View data" on dashboard charts; the reasoning is built by the server. Limit: "why" questions get the computed number, not a cause. — evidence: `AskAnswer.tsx` (Details), `apps/web/src/views/Dashboard.tsx` (`ChartCard`, "View data"), `apps/api/src/ai/answer.ts`.
+- [ ] Handling ambiguous queries — not done as a clarifying step: unknown measures, SKUs and wrong-side cities are refused with a reason and a suggested fix, but the app never asks a follow-up question. — evidence: `apps/api/test/rules.test.ts` "a city on the wrong side of to or from is refused with a hint", "unknown SKU with a real category prefix suggests that category".
