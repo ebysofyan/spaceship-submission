@@ -39,7 +39,7 @@ export function AnswerCard({
     <Card className="motion-safe:animate-answer-in space-y-6 p-5 sm:p-6">
       <div>
         <p className="text-sm text-muted">{response.question}</p>
-        <p className="mt-2 text-lg leading-relaxed text-ink sm:text-xl">{response.answer}</p>
+        <p className="mt-2 text-xl font-medium leading-snug text-ink sm:text-2xl">{response.answer}</p>
       </div>
 
       {query && <DynamicChart result={query} />}
@@ -68,7 +68,7 @@ export function AnswerCard({
         </a>
       )}
 
-      <Disclosure label="Details" bodyClassName="space-y-6">
+      <Disclosure label="How this was computed" bodyClassName="space-y-6">
         <Section title="Reasoning">
           <p className="text-sm leading-relaxed text-body">{interpretation.reasoning}</p>
         </Section>

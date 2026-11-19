@@ -72,16 +72,21 @@ export function Dashboard({ meta }: { meta: MetaResponse }) {
 function KpiGrid({ kpis, meta }: { kpis: Kpis; meta: MetaResponse }) {
   const definition = (metric: Metric) => meta.metrics.find((m) => m.id === metric)?.definition ?? "";
   const items: Array<{ label: string; metric: Metric; value: string; sub: string }> = [
-    { label: "Total orders", metric: "order_count", value: formatInt(kpis.totalOrders), sub: `Delivery base ${formatInt(kpis.deliveryBase)}` },
-    { label: "Delivered", metric: "delivered_count", value: formatInt(kpis.deliveredOrders), sub: "Status = delivered" },
-    { label: "Delayed", metric: "delayed_count", value: formatInt(kpis.delayedOrders), sub: "Status = delayed" },
+    { label: "Total orders", metric: "order_count", value: formatInt(kpis.totalOrders), sub: `Completed deliveries: ${formatInt(kpis.deliveryBase)}` },
+    { label: "Delivered", metric: "delivered_count", value: formatInt(kpis.deliveredOrders), sub: "Delivered without delay" },
+    { label: "Delayed", metric: "delayed_count", value: formatInt(kpis.delayedOrders), sub: "Late deliveries" },
     {
       label: "On-time rate",
       metric: "on_time_rate",
       value: formatPercent(kpis.onTimeRate),
-      sub: `${formatInt(kpis.deliveredOrders)} of ${formatInt(kpis.deliveryBase)} delivered`,
+      sub: `${formatInt(kpis.deliveredOrders)} of ${formatInt(kpis.deliveryBase)} completed deliveries`,
     },
-    { label: "Avg delivery time", metric: "avg_delivery_days", value: formatDays(kpis.avgDeliveryDays), sub: `Over ${formatInt(kpis.deliveryBase)} orders` },
+    {
+      label: "Avg delivery time",
+      metric: "avg_delivery_days",
+      value: formatDays(kpis.avgDeliveryDays),
+      sub: `Across ${formatInt(kpis.deliveryBase)} completed deliveries`,
+    },
   ];
 
   return (

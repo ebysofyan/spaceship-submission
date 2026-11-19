@@ -40,6 +40,9 @@ export function forecastFromParams(params: URLSearchParams, meta: Pick<MetaRespo
   return link;
 }
 
+// The core methodology is one paragraph; the page shows one sentence per list item.
+export const methodologySteps = (text: string): string[] => text.split(/(?<=[.!?])\s+/).filter(Boolean);
+
 // null until the SKU text matches a known SKU: no request for half-typed input.
 function buildSpec(kind: Kind, category: string, sku: string | undefined, horizonMonths: number, serviceLevel: number): ForecastSpec | null {
   const base = { horizonMonths, serviceLevel };
@@ -165,8 +168,29 @@ function Field({ id, label, hint, children }: { id: string; label: string; hint?
 
 function ForecastResults({ result, busy }: { result: ForecastResult; busy: boolean }) {
   const { recommendation: rec, spec } = result;
+  const months = `${spec.horizonMonths} ${spec.horizonMonths === 1 ? "month" : "months"}`;
   return (
     <div className={`space-y-6 transition-opacity ${busy ? "opacity-60" : ""}`} aria-busy={busy}>
+      <Card className="p-5 sm:p-6">
+        <p className="text-sm text-muted">
+          {formatTarget(spec.target)} · {Math.round((spec.serviceLevel ?? 0.95) * 100)}% service level
+        </p>
+        <h2 className="mt-1 text-balance text-2xl font-bold tracking-display text-ink sm:text-3xl">
+          Stock {formatInt(rec.recommendedInventory)} units for the next {months}
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-body">{rec.explanation}</p>
+        <dl className="mt-5 grid max-w-md grid-cols-2 gap-4 text-sm">
+          <div>
+            <dt className="text-muted">Forecast demand</dt>
+            <dd className="mt-0.5 font-medium tabular-nums text-ink">{formatInt(rec.forecastUnits)} units</dd>
+          </div>
+          <div>
+            <dt className="text-muted">Safety stock</dt>
+            <dd className="mt-0.5 font-medium tabular-nums text-ink">{formatInt(rec.safetyStock)} units</dd>
+          </div>
+        </dl>
+      </Card>
+
       <Notes items={result.warnings} />
 
       <Card>
@@ -179,50 +203,6 @@ function ForecastResults({ result, busy }: { result: ForecastResult; busy: boole
         </div>
       </Card>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader
-            title="Recommended inventory"
-            description={`Horizon ${spec.horizonMonths} months · ${Math.round((spec.serviceLevel ?? 0.95) * 100)}% service level`}
-          />
-          <div className="p-5">
-            <p className="text-4xl font-bold tracking-display tabular-nums text-ink">
-              {formatInt(rec.recommendedInventory)}
-              <span className="ml-2 text-base font-normal text-muted">units</span>
-            </p>
-            <dl className="mt-5 grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <dt className="text-muted">Forecast demand</dt>
-                <dd className="mt-0.5 font-medium tabular-nums text-ink">{formatInt(rec.forecastUnits)} units</dd>
-              </div>
-              <div>
-                <dt className="text-muted">Safety stock</dt>
-                <dd className="mt-0.5 font-medium tabular-nums text-ink">{formatInt(rec.safetyStock)} units</dd>
-              </div>
-            </dl>
-            <p className="mt-5 text-sm leading-relaxed text-body">{rec.explanation}</p>
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader title="Method comparison" description="Holdout MAE over the last 3 months; lowest error wins" />
-          <ul className="divide-y divide-line">
-            {result.methodsCompared.map((m) => {
-              const chosen = m.method === result.method;
-              return (
-                <li key={m.method} className={`flex items-center justify-between gap-3 px-5 py-3 text-sm ${chosen ? "bg-brand-50" : ""}`}>
-                  <span className="flex flex-wrap items-center gap-2 text-ink">
-                    {methodLabel(m.method)}
-                    {chosen && <Badge tone="accent">Selected</Badge>}
-                  </span>
-                  <span className="whitespace-nowrap tabular-nums text-body">MAE {m.mae.toFixed(1)}</span>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
-      </div>
-
       <Card>
         <CardHeader title="Forecast" description="Units per month, with the lower–upper interval" />
         <div className="p-5 pt-4">
@@ -231,8 +211,30 @@ function ForecastResults({ result, busy }: { result: ForecastResult; busy: boole
       </Card>
 
       <Card>
+        <CardHeader title="Method comparison" description="Holdout MAE over the last 3 months; lowest error wins" />
+        <ul className="divide-y divide-line">
+          {result.methodsCompared.map((m) => {
+            const chosen = m.method === result.method;
+            return (
+              <li key={m.method} className={`flex items-center justify-between gap-3 px-5 py-3 text-sm ${chosen ? "bg-brand-50" : ""}`}>
+                <span className="flex flex-wrap items-center gap-2 text-ink">
+                  {methodLabel(m.method)}
+                  {chosen && <Badge tone="accent">Selected</Badge>}
+                </span>
+                <span className="whitespace-nowrap tabular-nums text-body">MAE {m.mae.toFixed(1)}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </Card>
+
+      <Card>
         <CardHeader title="Methodology" />
-        <p className="p-5 text-sm leading-relaxed text-body">{result.methodology}</p>
+        <ul className="list-disc space-y-2 p-5 pl-9 text-sm leading-relaxed text-body">
+          {methodologySteps(result.methodology).map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ul>
       </Card>
     </div>
   );

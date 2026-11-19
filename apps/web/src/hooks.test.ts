@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ForecastSpec } from "@app/core";
-import { askHref, askQuestion, forecastHref, parseRoute } from "./hooks";
+import { askHref, askQuestion, forecastHref, parseRoute, tabOnlyHash } from "./hooks";
 
 describe("parseRoute", () => {
   test("reads the tab and its query", () => {
@@ -27,6 +27,14 @@ describe("askQuestion", () => {
     expect(askQuestion(new URLSearchParams(""))).toBeUndefined();
     expect(askQuestion(new URLSearchParams(`q=${"a".repeat(501)}`))).toBeUndefined();
     expect(askQuestion(new URLSearchParams(`q=${"a".repeat(500)}`))).toHaveLength(500);
+  });
+});
+
+describe("tabOnlyHash", () => {
+  test("drops the query so a consumed deep link does not ask again on reload", () => {
+    expect(tabOnlyHash(askHref("Which carrier?"))).toBe("#ask");
+    expect(tabOnlyHash("#forecast?kind=all&h=4")).toBe("#forecast");
+    expect(tabOnlyHash("#")).toBe("#dashboard");
   });
 });
 

@@ -1,17 +1,18 @@
 import type { CSSProperties } from "react";
 
 // Categorical order for any future multi-series chart: brand green, sky, mint, cyan, deep green, muted grey, light grey.
-// Brand green #17F082 is 1.5:1 on white, so green fills get a deep-green edge (barEdge) to stay visible.
+// Brand green #17F082 is 1.5:1 on white, so bars keep a mid-green edge at 3:1 (WCAG 1.4.11), not a near-black one.
 export const CHART = {
   body: "#454545",
   bar: "#17f082", // brand green: on-time, single-series bars
-  barEdge: "#07713b",
+  barEdge: "#4fa37a",
   line: "#07713b", // single-series line/area stroke: 6:1 on white
   history: "#1a1a1a",
   forecast: "#07713b", // dashed
   band: "#3ae8f6", // forecast range, drawn at low opacity
   delayed: "#e5484d",
-  exception: "#c97700", // warm amber; #f5a524 is 2:1 on white, too faint for a bar segment
+  // Blue, not amber: red and amber both read as olive-brown under red-green colour blindness; blue stays distinct.
+  exception: "#0273d3",
   grid: "#dbdbdb",
   muted: "#6d737f", // axis labels
   hover: "#f6f6f7",

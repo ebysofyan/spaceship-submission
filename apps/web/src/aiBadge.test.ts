@@ -6,14 +6,14 @@ import { aiBadge } from "./aiBadge";
 const state = (data?: Health, error?: string): AsyncState<Health> => ({ data, error, loading: false, retry: () => {} });
 
 describe("aiBadge", () => {
-  test("llm and ok shows AI with the model in the title", () => {
+  test("llm and ok shows AI on with the model in the title", () => {
     const badge = aiBadge(state({ ok: true, aiMode: "llm", model: "gpt-4o-mini", aiStatus: "ok" }));
-    expect(badge).toEqual({ label: "AI", tone: "accent", title: "Questions are interpreted by gpt-4o-mini" });
+    expect(badge).toEqual({ label: "AI on", tone: "accent", title: "Questions are interpreted by gpt-4o-mini" });
   });
 
-  test("llm without model or status still reads as AI", () => {
+  test("llm without model or status still reads as AI on", () => {
     expect(aiBadge(state({ ok: true, aiMode: "llm" })).title).toBe("Questions are interpreted by an LLM");
-    expect(aiBadge(state({ ok: true, aiMode: "llm" })).label).toBe("AI");
+    expect(aiBadge(state({ ok: true, aiMode: "llm" })).label).toBe("AI on");
   });
 
   test("llm and failing shows a warn AI fallback", () => {

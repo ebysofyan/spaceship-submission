@@ -1,10 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { forecastFromParams } from "./Forecast";
+import { forecastFromParams, methodologySteps } from "./Forecast";
 
 const meta = {
   categories: ["Paint", "Tools"],
   skus: [{ sku: "PAINT-0001", orders: 12 }],
 };
+
+describe("methodologySteps", () => {
+  test("splits on sentence ends only, so decimals and inline colons stay whole", () => {
+    const steps = methodologySteps("Interval: forecast \u00b1 1.96 \u00d7 \u03c3. Safety stock uses z = 1.645 for 95%. Done.");
+    expect(steps).toEqual(["Interval: forecast \u00b1 1.96 \u00d7 \u03c3.", "Safety stock uses z = 1.645 for 95%.", "Done."]);
+  });
+});
 
 describe("forecastFromParams", () => {
   test("sets kind, category, SKU and horizon from a valid link", () => {

@@ -69,6 +69,9 @@ export function askQuestion(params: URLSearchParams): string | undefined {
 
 export const askHref = (question: string) => `#ask?${new URLSearchParams({ q: question })}`;
 
+// Once a `#ask?q=` link is asked, the query is dropped so a reload does not ask it again.
+export const tabOnlyHash = (hash: string) => `#${parseRoute(hash).tab}`;
+
 export function forecastHref(spec: ForecastSpec): string {
   const { target } = spec;
   const params = new URLSearchParams({ kind: target.kind, h: String(spec.horizonMonths) });

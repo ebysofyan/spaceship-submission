@@ -19,7 +19,7 @@ export function aiBadge({ data, error }: AsyncState<Health>): AiBadge {
     if (data.aiStatus === "failing") {
       return { label: "AI fallback", tone: "warn", title: "The AI model is unavailable; using keyword matching" };
     }
-    return { label: "AI", tone: "accent", title: `Questions are interpreted by ${data.model ?? "an LLM"}` };
+    return { label: "AI on", tone: "accent", title: `Questions are interpreted by ${data.model ?? "an LLM"}` };
   }
   if (data.aiMode === "rules") {
     return { label: "Keyword mode", tone: "accent", title: "Questions are interpreted by deterministic rules" };

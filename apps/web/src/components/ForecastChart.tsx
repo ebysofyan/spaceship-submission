@@ -3,16 +3,15 @@ import type { ForecastResult } from "@app/core";
 import { formatInt, formatKey } from "../format";
 import { AXIS_TICK, CHART, LEGEND_LABEL, TOOLTIP_ITEM_STYLE, TOOLTIP_STYLE } from "./chartTheme";
 
-// History solid, forecast dashed, shaded lower–upper band, divider at the last actual month.
+// History solid, forecast dashed, shaded lower–upper band over the forecast months, divider at the last actual month.
 export function ForecastChart({ result, height = 300 }: { result: ForecastResult; height?: number }) {
   const lastActual = result.history.at(-1)?.month;
   const data = [
     ...result.history.map((h) => ({
       label: formatKey(h.month),
       actual: h.units,
-      // The last actual point also starts the dashed line and the band (zero-width there), so the band meets the divider.
+      // The last actual point starts the dashed line so the two lines join at the divider; the band starts at the first forecast month.
       forecast: h.month === lastActual ? h.units : null,
-      band: h.month === lastActual ? [h.units, h.units] : null,
     })),
     ...result.forecast.map((f) => ({
       label: formatKey(f.month),
@@ -36,7 +35,8 @@ export function ForecastChart({ result, height = 300 }: { result: ForecastResult
         />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} labelStyle={LEGEND_LABEL} />
         {lastActual && <ReferenceLine x={formatKey(lastActual)} stroke={CHART.muted} strokeDasharray="3 3" />}
-        <Area dataKey="band" name="Forecast range" stroke="none" fill={CHART.band} fillOpacity={0.25} legendType="rect" />
+        {/* No entry animation: a half-drawn band reads as a band that stops early. */}
+        <Area dataKey="band" name="Forecast range" stroke="none" fill={CHART.band} fillOpacity={0.25} legendType="rect" isAnimationActive={false} />
         <Line dataKey="actual" name="History" stroke={CHART.history} strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
         <Line dataKey="forecast" name="Forecast" stroke={CHART.forecast} strokeWidth={2} strokeDasharray="6 4" dot={{ r: 3 }} connectNulls={false} />
       </ComposedChart>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ChevronDown, Loader2, Search, Send } from "lucide-react";
 import type { AskResponse, MetaResponse } from "@app/core";
 import { ask } from "../api";
-import { errorMessage } from "../hooks";
+import { errorMessage, tabOnlyHash } from "../hooks";
 import { AnswerCard } from "./AskAnswer";
 import { Button, Chip } from "../components/ui/Button";
 import { Card, CardHeader } from "../components/ui/Card";
@@ -34,6 +34,8 @@ export function Ask({ meta, question: deepLink, onAnswered }: { meta: MetaRespon
     if (!deepLink) handledLink.current = undefined;
     else if (handledLink.current !== deepLink) {
       handledLink.current = deepLink;
+      // replaceState fires no hashchange, so the route keeps the question and nothing re-asks.
+      window.history.replaceState(null, "", tabOnlyHash(window.location.hash));
       void submit(deepLink);
     }
   }, [deepLink]);
@@ -103,7 +105,7 @@ export function Ask({ meta, question: deepLink, onAnswered }: { meta: MetaRespon
               }`}
             >
               <span className="line-clamp-2 block text-sm text-ink">{question}</span>
-              <span className="mt-1 block text-xs text-muted">
+              <span className="mt-1 block text-xs text-body">
                 {response
                   ? `${toolLabel(response.interpretation.tool)} · ${sourceLabel(response.interpretation.source)}`
                   : "Working…"}
