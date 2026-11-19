@@ -116,6 +116,8 @@ export function runQuery(orders: Order[], spec: QuerySpec): QueryResult {
   );
 
   const scalar = !spec.groupBy && !spec.timeGrain ? def.compute(inRange) : null;
+  const scoped = Boolean(spec.dateRange) || Object.values(spec.filters ?? {}).some((v) => v?.length);
+  const baseline = scalar && scoped ? { ...def.compute(orders), matchedOrders: orders.length } : null;
   const all = spec.timeGrain
     ? timeRows(inRange, spec.timeGrain, range, def)
     : spec.groupBy
@@ -139,6 +141,7 @@ export function runQuery(orders: Order[], spec: QuerySpec): QueryResult {
     isRate: def.isRate,
     value: scalar?.value ?? null,
     base: scalar?.base ?? null,
+    baseline,
     rows: shown,
     chart: chartFor(spec, shown.length, def),
     matchedOrders: inRange.length,

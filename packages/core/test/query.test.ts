@@ -47,6 +47,31 @@ describe("scalar metrics (dataset.md reference values)", () => {
   });
 });
 
+describe("baseline: the same metric over every order", () => {
+  test("filtered average delivery time carries the overall figure and its base", () => {
+    const r = run({ metric: "avg_delivery_days", filters: { region: ["EU"] } });
+    expect(r.value).toBeCloseTo(4.15, 2);
+    expect(r.baseline).toEqual({ value: expect.any(Number), base: 370, matchedOrders: 400 });
+    expect(r.baseline?.value).toBeCloseTo(3.83, 2);
+  });
+
+  test("date-ranged count compares with the whole dataset", () => {
+    const r = run({ metric: "delayed_count", dateRange: { last: 1, unit: "month" } });
+    expect(r.value).toBe(4);
+    expect(r.baseline).toEqual({ value: 55, base: null, matchedOrders: 400 });
+  });
+
+  test("no filter and no dateRange: no baseline", () => {
+    expect(run({ metric: "delayed_count" }).baseline).toBeNull();
+    expect(run({ metric: "delayed_count", filters: { carrier: [] } }).baseline).toBeNull();
+  });
+
+  test("grouped and time-bucketed results have no baseline", () => {
+    expect(run({ metric: "delay_rate", groupBy: "carrier", filters: { region: ["EU"] } }).baseline).toBeNull();
+    expect(run({ metric: "order_count", timeGrain: "month", dateRange: { last: 3, unit: "month" } }).baseline).toBeNull();
+  });
+});
+
 describe("time buckets", () => {
   test("monthly order counts match dataset.md, zero-filled and chronological", () => {
     const rows = run({ metric: "order_count", timeGrain: "month" }).rows;

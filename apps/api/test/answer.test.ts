@@ -24,7 +24,7 @@ describe("answer templates", () => {
 
   test("last month's delayed count names the month", () => {
     expect(say("How many orders were delivered late last month?")).toBe(
-      "4 orders were delayed in November 2025.",
+      "4 orders were delayed in November 2025. That is 4 of the 55 delayed orders overall.",
     );
   });
 
@@ -67,19 +67,25 @@ describe("answer templates", () => {
 
   test("scalar rate names the filters and the base", () => {
     expect(query({ metric: "on_time_rate", filters: { carrier: ["FedEx", "UPS"] } })).toBe(
-      "On-time rate for FedEx and UPS was 81.0% (132 of 163 orders) in 2025.",
+      "On-time rate for FedEx and UPS was 81.0% (132 of 163 orders) in 2025. That is 1.2 pts below the 82.2% overall rate.",
     );
   });
 
   test("scalar average uses the delivery base, with the filter in the middle", () => {
     expect(say("average delivery time for DHL")).toBe(
-      "Average delivery time for DHL was 3.52 days across 58 completed deliveries in 2025.",
+      "Average delivery time for DHL was 3.52 days across 58 completed deliveries in 2025. That is 0.31 days faster than the overall average of 3.83 days across all 370 completed deliveries.",
+    );
+  });
+
+  test("a filtered average is compared with the overall average, in the same unit", () => {
+    expect(say("average delivery time in EU")).toBe(
+      "Average delivery time for EU was 4.15 days across 72 completed deliveries in 2025. That is 0.32 days slower than the overall average of 3.83 days across all 370 completed deliveries.",
     );
   });
 
   test("scalar money is gross, with the note at the end", () => {
     expect(query({ metric: "revenue", filters: { carrier: ["DHL"] } })).toMatch(
-      /^Revenue for DHL was \$[\d,]+\.\d{2} in 2025 \(gross, before promo discounts\)\.$/,
+      /^Revenue for DHL was \$[\d,]+\.\d{2} in 2025 \(gross, before promo discounts\)\. That is \$[\d,]+\.\d{2} of the \$[\d,]+\.\d{2} revenue \(gross\) overall\.$/,
     );
   });
 
@@ -90,13 +96,13 @@ describe("answer templates", () => {
   });
 
   test("a status count names the status, not a filter", () => {
-    expect(say("How many orders were canceled?")).toBe("3 orders were placed with status canceled in 2025.");
+    expect(say("How many orders were canceled?")).toBe("3 orders were placed with status canceled in 2025. That is 3 of the 400 orders overall.");
   });
 
   test("origin and destination filters read as from and to, other filters keep for", () => {
-    expect(say("show orders from London")).toBe("54 orders were placed from London, UK in 2025.");
-    expect(say("deliveries to Leeds")).toBe("11 orders were delivered to Leeds, UK in 2025.");
-    expect(say("How many orders did FedEx deliver in October?")).toBe("6 orders were delivered for FedEx in October 2025.");
+    expect(say("show orders from London")).toBe("54 orders were placed from London, UK in 2025. That is 54 of the 400 orders overall.");
+    expect(say("deliveries to Leeds")).toBe("11 orders were delivered to Leeds, UK in 2025. That is 11 of the 304 delivered orders overall.");
+    expect(say("How many orders did FedEx deliver in October?")).toBe("6 orders were delivered for FedEx in October 2025. That is 6 of the 304 delivered orders overall.");
   });
 
   test("money series says highest, not busiest", () => {
@@ -118,7 +124,7 @@ describe("answer templates", () => {
   });
 
   test("a bare carrier with no measure reads as its on-time rate", () => {
-    expect(say("how is FedEx doing")).toBe("On-time rate for FedEx was 85.9% (73 of 85 orders) in 2025.");
+    expect(say("how is FedEx doing")).toBe("On-time rate for FedEx was 85.9% (73 of 85 orders) in 2025. That is 3.7 pts above the 82.2% overall rate.");
   });
 
   test("LLM reasoning is described from the validated spec", () => {

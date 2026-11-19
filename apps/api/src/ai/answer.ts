@@ -130,8 +130,30 @@ const SCALAR: Record<Metric, Scalar> = {
   avg_order_value: (v, _b, w, t) => join(join("Average order value", w), `was ${money(v)}`, t),
 };
 
+// The same metric over every order: rates in points, averages against the overall average, counts as "x of y".
+function overallText(q: QueryResult, b: NonNullable<QueryResult["baseline"]>): string {
+  const { metric } = q.spec;
+  const v = q.value ?? 0;
+  const ov = b.value ?? 0;
+  const fmt = FORMAT[metric];
+  if (q.isRate) {
+    const pts = (Math.abs(v - ov) * 100).toFixed(1);
+    if (pts === "0.0") return `That is in line with the ${pct(ov)} overall rate.`;
+    return `That is ${pts} pts ${v > ov ? "above" : "below"} the ${pct(ov)} overall rate.`;
+  }
+  if (isRatio(q)) {
+    const [up, down] = isDelivery(metric) ? ["slower", "faster"] : ["higher", "lower"];
+    const scope = `across all ${baseText(metric, isDelivery(metric) ? (b.base ?? 0) : b.matchedOrders)}`;
+    const gap = fmt(Math.abs(v - ov));
+    if (gap === fmt(0)) return `That is in line with the overall average of ${fmt(ov)} ${scope}.`;
+    return `That is ${gap} ${v > ov ? up : down} than the overall average of ${fmt(ov)} ${scope}.`;
+  }
+  return `That is ${fmt(v)} of the ${fmt(ov)} ${q.metricLabel.toLowerCase()} overall.`;
+}
+
 function scalarAnswer(q: QueryResult, data: Range): string {
-  return `${SCALAR[q.spec.metric](q.value ?? 0, q.base ?? 0, who(q), when(q, data))}.`;
+  const sentence = `${SCALAR[q.spec.metric](q.value ?? 0, q.base ?? 0, who(q), when(q, data))}.`;
+  return q.baseline ? `${sentence} ${overallText(q, q.baseline)}` : sentence;
 }
 
 // Two to four values of the grouped dimension ("compare UPS and FedEx"): name every one, in rank order.

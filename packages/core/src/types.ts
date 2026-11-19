@@ -86,6 +86,8 @@ export interface QueryResult {
   isRate: boolean; // value in 0..1, UI formats as %
   value: number | null; // scalar answer when no groupBy/timeGrain, else null
   base: number | null; // denominator for rates (scalar case)
+  // Scalar with a filter or dateRange only: the same metric over every order, for comparison.
+  baseline: { value: number | null; base: number | null; matchedOrders: number } | null;
   // One row per bucket/group: { key: "GLS", value: 0.375, base: 8, orders: 8 }.
   // Time buckets are complete (empty buckets present with value 0) and chronological.
   rows: Array<{ key: string; value: number; base: number | null; orders: number }>;
