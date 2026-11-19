@@ -4,6 +4,7 @@ import { describeSpec } from "./answer";
 import { parseForecast, parseQuery, type Schemas } from "./schemas";
 
 export const DEFAULT_DAILY_LIMIT = 500;
+export const DEFAULT_IP_DAILY_LIMIT = 40;
 
 export interface AiConfig {
   apiKey?: string;
@@ -11,10 +12,12 @@ export interface AiConfig {
   model: string;
   reasoningEffort?: string; // sent as reasoning_effort when non-empty
   dailyLimit?: number; // LLM calls per UTC day, then keyword matching; undefined = DEFAULT_DAILY_LIMIT
+  ipDailyLimit?: number; // LLM calls per client IP per UTC day; undefined = DEFAULT_IP_DAILY_LIMIT
 }
 
 export function aiConfigFromEnv(env: Record<string, string | undefined> = process.env): AiConfig {
   const limit = Number(env.AI_DAILY_LIMIT || DEFAULT_DAILY_LIMIT);
+  const ipLimit = Number(env.AI_IP_DAILY_LIMIT || DEFAULT_IP_DAILY_LIMIT);
   return {
     apiKey: env.AI_API_KEY || undefined,
     baseUrl: env.AI_BASE_URL || "https://ai.sumopod.com/v1",
@@ -23,10 +26,11 @@ export function aiConfigFromEnv(env: Record<string, string | undefined> = proces
     reasoningEffort: env.AI_REASONING_EFFORT ?? "none",
     // NaN would make the cap never trip, so a bad value falls back to the default.
     dailyLimit: Number.isNaN(limit) ? DEFAULT_DAILY_LIMIT : limit,
+    ipDailyLimit: Number.isNaN(ipLimit) ? DEFAULT_IP_DAILY_LIMIT : ipLimit,
   };
 }
 
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = 10_000; // median is 1.7 s (gpt-6-luna) to 5 s (glm)
 const MAX_TOKENS = 300; // a tool call is ~60 tokens
 // Enums bigger than this (SKUs, cities, client IDs) cost thousands of prompt tokens; zod still enforces them.
 const ENUM_LIMIT = 20;

@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { createServer } from "../src/server";
 import { loadDataset, type Dataset } from "../src/data";
 import { buildSchemas, parseQuery } from "../src/ai/schemas";
-import { interpret, tidyQuery, type AiState } from "../src/ask";
+import { cacheKey, interpret, tidyQuery, type AiState } from "../src/ask";
 import type { Interpretation, QuerySpec } from "@app/core";
 import { toolDefinitions } from "../src/ai/llm";
 import type { AiConfig } from "../src/ai/llm";
@@ -30,7 +32,12 @@ const post = (path: string, body: unknown, origin = base) =>
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
 
-const freshState = (): AiState => ({ cache: new Map(), lastAttemptFailed: false, usage: { day: "", calls: 0 } });
+const freshState = (): AiState => ({
+  cache: new Map(),
+  lastAttemptFailed: false,
+  usage: { day: "", calls: 0 },
+  ipUsage: { day: "", calls: new Map() },
+});
 
 describe("http api", () => {
   test("health reports rules mode without a key", async () => {
@@ -99,6 +106,28 @@ describe("http api", () => {
   test("unknown api route is a JSON 404", async () => {
     expect((await fetch(`${base}/api/nope`)).status).toBe(404);
   });
+
+  test("security headers and cache-control on api, static, SPA fallback and 404 responses", async () => {
+    const CSP =
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
+    const asset = `/assets/${readdirSync(join(import.meta.dir, "../../web/dist/assets")).find((f) => f.endsWith(".js"))}`;
+    const headersOf = async (path: string) => {
+      const res = await fetch(`${base}${path}`);
+      await res.body?.cancel();
+      return res.headers;
+    };
+    for (const path of ["/api/health", "/", asset, "/api/nope", "/some/spa/route"]) {
+      const h = await headersOf(path);
+      expect(h.get("content-security-policy")).toBe(CSP);
+      expect(h.get("x-content-type-options")).toBe("nosniff");
+      expect(h.get("referrer-policy")).toBe("no-referrer");
+    }
+    expect((await headersOf(asset)).get("cache-control")).toBe("public, max-age=31536000, immutable");
+    expect((await headersOf("/")).get("cache-control")).toBe("no-cache");
+    expect((await headersOf("/some/spa/route")).get("cache-control")).toBe("no-cache");
+    expect((await headersOf("/api/health")).get("cache-control")).toBe("no-store");
+    expect((await headersOf("/api/nope")).get("cache-control")).toBe("no-store");
+  });
 });
 
 describe("schemas", () => {
@@ -137,7 +166,25 @@ describe("LLM path", () => {
   const reply = (args: object) => callReply("run_query", args);
   const CARRIER = { metric: "delay_rate", groupBy: "carrier" };
   const QUESTION = "Which carrier has the highest delay rate?";
-  const deps = (ai: AiConfig) => ({ meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai, state: freshState() });
+  const deps = (ai: AiConfig) => ({ meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai, state: freshState(), ip: "test" });
+  // trustFlyIp is read when the server starts, so FLY_APP_NAME is set only around createServer.
+  const serveAs = (ai: AiConfig, fly: boolean) => {
+    const prev = process.env.FLY_APP_NAME;
+    if (fly) process.env.FLY_APP_NAME = "test-app";
+    else delete process.env.FLY_APP_NAME;
+    try {
+      return createServer(dataset, ai, 0);
+    } finally {
+      if (prev === undefined) delete process.env.FLY_APP_NAME;
+      else process.env.FLY_APP_NAME = prev;
+    }
+  };
+  const askAs = (origin: string, ip: string) =>
+    fetch(`${origin}/api/ask`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "fly-client-ip": ip },
+      body: JSON.stringify({ question: QUESTION }),
+    });
 
   test("a valid tool call is used and normalised", async () => {
     const srv = stub(() => reply(CARRIER));
@@ -291,6 +338,78 @@ describe("LLM path", () => {
     for (let i = 0; i < 25; i++) expect((await post("/api/ask", { question: QUESTION })).status).toBe(200);
   });
 
+  test("without FLY_APP_NAME a spoofed fly-client-ip does not change the rate-limit key", async () => {
+    const srv = stub(() => reply(CARRIER));
+    const keyed = serveAs({ apiKey: "k", baseUrl: `http://localhost:${srv.port}`, model: "test" }, false);
+    const origin = `http://localhost:${keyed.port}`;
+    try {
+      for (let i = 0; i < 20; i++) expect((await askAs(origin, `10.0.0.${i}`)).status).toBe(200);
+      expect((await askAs(origin, "10.0.1.1")).status).toBe(429);
+    } finally {
+      keyed.stop(true);
+      srv.stop(true);
+    }
+  });
+
+  test("with FLY_APP_NAME set, fly-client-ip is the client: each value gets its own 20 a minute", async () => {
+    const srv = stub(() => reply(CARRIER));
+    const keyed = serveAs({ apiKey: "k", baseUrl: `http://localhost:${srv.port}`, model: "test" }, true);
+    const origin = `http://localhost:${keyed.port}`;
+    try {
+      for (let i = 0; i < 20; i++) expect((await askAs(origin, "1.1.1.1")).status).toBe(200);
+      expect((await askAs(origin, "1.1.1.1")).status).toBe(429);
+      expect((await askAs(origin, "2.2.2.2")).status).toBe(200);
+    } finally {
+      keyed.stop(true);
+      srv.stop(true);
+    }
+  });
+
+  test("per-IP budget: the 41st uncached question from one IP gets rules with no LLM call; another IP still gets the LLM; cache hits never count", async () => {
+    let calls = 0;
+    const srv = stub(() => {
+      calls++;
+      return reply(CARRIER);
+    });
+    const ai = { apiKey: "k", baseUrl: `http://localhost:${srv.port}`, model: "test" };
+    const state = freshState();
+    const as = (question: string, ip: string) => interpret(question, { meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai, state, ip });
+    try {
+      for (let i = 0; i < 40; i++) expect((await as(`Carrier question ${i}`, "10.0.0.1")).source).toBe("llm");
+      const over = await as("Carrier question 40", "10.0.0.1");
+      expect(over.source).toBe("rules");
+      expect(over.reasoning).toEndWith(" (Your daily AI limit is used up, used keyword matching.)");
+      expect(calls).toBe(40);
+
+      expect((await as("Carrier question 41", "10.0.0.2")).source).toBe("llm");
+      expect(calls).toBe(41);
+
+      expect((await as("Carrier question 3", "10.0.0.1")).source).toBe("llm");
+      expect(calls).toBe(41);
+    } finally {
+      srv.stop(true);
+    }
+  });
+
+  test("spelling variants of one question make one LLM call: case, spacing and trailing ?.! are ignored", async () => {
+    let calls = 0;
+    const srv = stub(() => {
+      calls++;
+      return reply(CARRIER);
+    });
+    const keyed = createServer(dataset, { apiKey: "k", baseUrl: `http://localhost:${srv.port}`, model: "test" }, 0);
+    const origin = `http://localhost:${keyed.port}`;
+    try {
+      for (const q of ["Which carrier has the highest delay rate?", "which  carrier has the highest delay rate", " WHICH carrier has the highest delay rate ?! "]) {
+        expect((await jsonOf(await post("/api/ask", { question: q }, origin))).interpretation.source).toBe("llm");
+      }
+      expect(calls).toBe(1);
+    } finally {
+      keyed.stop(true);
+      srv.stop(true);
+    }
+  });
+
   test("a status filter that only restates the metric is dropped before the query runs", async () => {
     const srv = stub(() =>
       reply({ reasoning: "delayed by week", metric: "delayed_count", filters: { status: ["delayed"] }, timeGrain: "week", dateRange: { last: 3, unit: "month" } }),
@@ -318,6 +437,13 @@ describe("LLM path", () => {
       keyed.stop(true);
       srv.stop(true);
     }
+  });
+});
+
+describe("cacheKey", () => {
+  test("trims, lowercases, collapses internal spaces and drops trailing ?.! and spaces", () => {
+    expect(cacheKey("  Which   carrier ?? ")).toBe("which carrier");
+    expect(cacheKey("Which carrier?")).toBe(cacheKey("which  CARRIER ! "));
   });
 });
 

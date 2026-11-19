@@ -1,4 +1,5 @@
 import { join, resolve, sep } from "node:path";
+import type { Server } from "bun";
 import { runForecast, runQuery } from "@app/core";
 import { ask, dailyLimitReached, InputError, type AiState } from "./ask";
 import { aiConfigFromEnv, type AiConfig } from "./ai/llm";
@@ -11,6 +12,39 @@ const INDEX_HTML = join(WEB_DIST, "index.html");
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 const badRequest = (e: unknown) => json({ error: e instanceof Error ? e.message : String(e) }, 400);
+
+// The app has no inline script (Vite emits an external module). Inline styles come from Recharts.
+const SECURITY_HEADERS: Record<string, string> = {
+  "content-security-policy":
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer",
+};
+
+// Every response gets the headers. Cache-Control defaults to no-store for /api/* and no-cache otherwise; served assets set their own.
+function secure(req: Request, res: Response): Response {
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.headers.set(k, v);
+  if (!res.headers.has("cache-control")) {
+    res.headers.set("cache-control", new URL(req.url).pathname.startsWith("/api/") ? "no-store" : "no-cache");
+  }
+  return res;
+}
+
+type Handler = (req: Request, server: Server<undefined>) => Response | Promise<Response>;
+
+// Bun.serve routes skip fetch(), so their responses are passed through secure() here.
+const secureRoutes = <T extends Record<string, Record<string, Handler>>>(routes: T): T =>
+  Object.fromEntries(
+    Object.entries(routes).map(([path, methods]) => [
+      path,
+      Object.fromEntries(
+        Object.entries(methods).map(([method, h]) => [
+          method,
+          async (req: Request, server: Server<undefined>) => secure(req, await h(req, server)),
+        ]),
+      ),
+    ]),
+  ) as T;
 
 async function readJson(req: Request): Promise<unknown> {
   try {
@@ -30,7 +64,11 @@ async function serveWeb(pathname: string): Promise<Response> {
   }
   const file = Bun.file(filePath);
   // SPA fallback: any unknown path serves index.html so client routing works.
-  if (pathname !== "/" && (await file.exists())) return new Response(file);
+  if (pathname !== "/" && (await file.exists())) {
+    // Built asset names carry a content hash, so they never change and can be cached forever.
+    const headers = pathname.startsWith("/assets/") ? { "cache-control": "public, max-age=31536000, immutable" } : undefined;
+    return new Response(file, { headers });
+  }
   return new Response(Bun.file(INDEX_HTML));
 }
 
@@ -51,14 +89,21 @@ function fixedWindow(max: number, windowMs: number) {
 export function createServer(dataset: Dataset, ai: AiConfig, port = 3000) {
   const { orders, meta, dashboard } = dataset;
   const schemas = buildSchemas(meta);
-  const state: AiState = { cache: new Map(), lastAttemptFailed: false, usage: { day: "", calls: 0 } };
+  const state: AiState = {
+    cache: new Map(),
+    lastAttemptFailed: false,
+    usage: { day: "", calls: 0 },
+    ipUsage: { day: "", calls: new Map() },
+  };
   const allowAsk = fixedWindow(20, 60_000);
+  // Behind Fly's proxy the socket IP is the proxy, so the client-IP header is the real one. Anywhere else a client can send that header, so it is ignored.
+  const trustFlyIp = Boolean(process.env.FLY_APP_NAME);
 
   return Bun.serve({
     port,
     // Questions are capped at 500 chars, so 16 KB is generous; bigger bodies are refused before they are read.
     maxRequestBodySize: 16 * 1024,
-    routes: {
+    routes: secureRoutes({
       "/api/health": {
         GET: () => {
           if (!ai.apiKey) return json({ ok: true, aiMode: "rules" });
@@ -88,16 +133,15 @@ export function createServer(dataset: Dataset, ai: AiConfig, port = 3000) {
       },
       "/api/ask": {
         POST: async (req, server) => {
+          const ip = (trustFlyIp && req.headers.get("fly-client-ip")) || server.requestIP(req)?.address || "unknown";
           // Only the paid LLM path is limited; rules mode is free.
-          // Behind Fly's proxy the socket IP is the proxy, so prefer the client IP header it sets.
-          const ip = req.headers.get("fly-client-ip") ?? server.requestIP(req)?.address ?? "unknown";
           if (ai.apiKey && !allowAsk(ip)) {
             return json({ error: "Too many questions, try again in a minute." }, 429);
           }
           try {
             const question = ((await readJson(req)) as { question?: unknown } | null)?.question;
             if (typeof question !== "string") throw new InputError("question must be a string");
-            return json(await ask(question, { orders, meta, schemas, ai, state }));
+            return json(await ask(question, { orders, meta, schemas, ai, state, ip }));
           } catch (e) {
             if (e instanceof InputError) return badRequest(e);
             console.error(e);
@@ -105,11 +149,15 @@ export function createServer(dataset: Dataset, ai: AiConfig, port = 3000) {
           }
         },
       },
-    },
-    fetch(req) {
+    }),
+    async fetch(req) {
       const { pathname } = new URL(req.url);
-      if (pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
-      return serveWeb(pathname);
+      if (pathname.startsWith("/api/")) return secure(req, json({ error: "Not found" }, 404));
+      return secure(req, await serveWeb(pathname));
+    },
+    error(e) {
+      console.error(e);
+      return new Response("Internal error", { status: 500, headers: { ...SECURITY_HEADERS, "cache-control": "no-store" } });
     },
   });
 }

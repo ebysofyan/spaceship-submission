@@ -17,3 +17,5 @@ services:
         value: none
       - key: AI_DAILY_LIMIT
         value: "500"
+      - key: AI_IP_DAILY_LIMIT
+        value: "40"

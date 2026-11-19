@@ -7,14 +7,20 @@ const { meta } = await loadDataset();
 const schemas = buildSchemas(meta);
 
 describe("aiConfigFromEnv", () => {
-  test("defaults to the SumoPod gpt-6-luna model with reasoning_effort none and a 500-call daily limit", () => {
+  test("defaults to the SumoPod gpt-6-luna model with reasoning_effort none, a 500-call daily limit and a 40-call per-IP limit", () => {
     expect(aiConfigFromEnv({})).toEqual({
       apiKey: undefined,
       baseUrl: "https://ai.sumopod.com/v1",
       model: "gpt-6-luna",
       reasoningEffort: "none",
       dailyLimit: 500,
+      ipDailyLimit: 40,
     });
+  });
+
+  test("AI_IP_DAILY_LIMIT is read as a number; garbage falls back to the default", () => {
+    expect(aiConfigFromEnv({ AI_IP_DAILY_LIMIT: "12" }).ipDailyLimit).toBe(12);
+    expect(aiConfigFromEnv({ AI_IP_DAILY_LIMIT: "lots" }).ipDailyLimit).toBe(40);
   });
 
   test("AI_DAILY_LIMIT is read as a number; 0 is kept, garbage falls back to the default", () => {
