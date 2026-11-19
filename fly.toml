@@ -2,6 +2,11 @@
 app = "logistics-analytics"
 primary_region = "iad"
 
+[env]
+  AI_BASE_URL = "https://ai.sumopod.com/v1"
+  AI_MODEL = "gpt-6-luna"
+  AI_REASONING_EFFORT = "none"
+
 [http_service]
   internal_port = 3000
   force_https = true

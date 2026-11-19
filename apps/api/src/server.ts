@@ -1,6 +1,6 @@
 import { join, resolve, sep } from "node:path";
 import { runForecast, runQuery } from "@app/core";
-import { ask, InputError } from "./ask";
+import { ask, InputError, type AiState } from "./ask";
 import { aiConfigFromEnv, type AiConfig } from "./ai/llm";
 import { buildSchemas, parseForecast, parseQuery } from "./ai/schemas";
 import { loadDataset, type Dataset } from "./data";
@@ -34,14 +34,37 @@ async function serveWeb(pathname: string): Promise<Response> {
   return new Response(Bun.file(INDEX_HTML));
 }
 
+// Fixed window per key (client IP). Returns false once a key has used up its quota for the window.
+function fixedWindow(max: number, windowMs: number) {
+  const hits = new Map<string, { start: number; count: number }>();
+  return (key: string): boolean => {
+    const now = Date.now();
+    // shortcut: wipes all windows at 10k IPs to bound memory, upgrade to an LRU if traffic is real
+    if (hits.size > 10_000) hits.clear();
+    let w = hits.get(key);
+    if (!w || now - w.start >= windowMs) hits.set(key, (w = { start: now, count: 0 }));
+    w.count++;
+    return w.count <= max;
+  };
+}
+
 export function createServer(dataset: Dataset, ai: AiConfig, port = 3000) {
   const { orders, meta, dashboard } = dataset;
   const schemas = buildSchemas(meta);
+  const state: AiState = { cache: new Map(), lastAttemptFailed: false };
+  const allowAsk = fixedWindow(20, 60_000);
 
   return Bun.serve({
     port,
     routes: {
-      "/api/health": { GET: () => json({ ok: true, aiMode: ai.apiKey ? "llm" : "rules" }) },
+      "/api/health": {
+        GET: () =>
+          json(
+            ai.apiKey
+              ? { ok: true, aiMode: "llm", model: ai.model, aiStatus: state.lastAttemptFailed ? "failing" : "ok" }
+              : { ok: true, aiMode: "rules" },
+          ),
+      },
       "/api/meta": { GET: () => json(meta) },
       "/api/dashboard": { GET: () => json(dashboard) },
       "/api/query": {
@@ -63,11 +86,17 @@ export function createServer(dataset: Dataset, ai: AiConfig, port = 3000) {
         },
       },
       "/api/ask": {
-        POST: async (req) => {
+        POST: async (req, server) => {
+          // Only the paid LLM path is limited; rules mode is free.
+          // Behind Fly's proxy the socket IP is the proxy, so prefer the client IP header it sets.
+          const ip = req.headers.get("fly-client-ip") ?? server.requestIP(req)?.address ?? "unknown";
+          if (ai.apiKey && !allowAsk(ip)) {
+            return json({ error: "Too many questions, try again in a minute." }, 429);
+          }
           try {
             const question = ((await readJson(req)) as { question?: unknown } | null)?.question;
             if (typeof question !== "string") throw new InputError("question must be a string");
-            return json(await ask(question, { orders, meta, schemas, ai }));
+            return json(await ask(question, { orders, meta, schemas, ai, state }));
           } catch (e) {
             if (e instanceof InputError) return badRequest(e);
             console.error(e);

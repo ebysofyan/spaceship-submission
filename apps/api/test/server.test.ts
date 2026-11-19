@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createServer } from "../src/server";
 import { loadDataset, type Dataset } from "../src/data";
 import { buildSchemas, parseQuery } from "../src/ai/schemas";
-import { interpret } from "../src/ask";
+import { interpret, tidyQuery, type AiState } from "../src/ask";
+import type { Interpretation, QuerySpec } from "@app/core";
 import { toolDefinitions } from "../src/ai/llm";
 import type { AiConfig } from "../src/ai/llm";
 
@@ -22,12 +23,14 @@ afterAll(() => server.stop(true));
 // Test-only: response bodies are checked by the assertions that follow.
 const jsonOf = async (res: Response): Promise<any> => res.json();
 
-const post = (path: string, body: unknown) =>
-  fetch(`${base}${path}`, {
+const post = (path: string, body: unknown, origin = base) =>
+  fetch(`${origin}${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
+
+const freshState = (): AiState => ({ cache: new Map(), lastAttemptFailed: false });
 
 describe("http api", () => {
   test("health reports rules mode without a key", async () => {
@@ -115,29 +118,19 @@ describe("schemas", () => {
 describe("LLM path", () => {
   // Stub OpenAI-compatible endpoint, so the tests never touch the network.
   const stub = (handler: (req: Request) => Response) => Bun.serve({ port: 0, fetch: handler });
+  const reply = (args: object) =>
+    Response.json({
+      choices: [{ message: { tool_calls: [{ function: { name: "run_query", arguments: JSON.stringify(args) } }] } }],
+    });
+  const CARRIER = { reasoning: "carrier ranking", metric: "delay_rate", groupBy: "carrier" };
+  const QUESTION = "Which carrier has the highest delay rate?";
+  const deps = (ai: AiConfig) => ({ meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai, state: freshState() });
 
   test("a valid tool call is used and normalised", async () => {
-    const srv = stub(() =>
-      Response.json({
-        choices: [
-          {
-            message: {
-              tool_calls: [
-                {
-                  function: {
-                    name: "run_query",
-                    arguments: JSON.stringify({ reasoning: "carrier ranking", metric: "delay_rate", groupBy: "carrier" }),
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      }),
-    );
+    const srv = stub(() => reply(CARRIER));
     try {
       const ai = { apiKey: "test-key", baseUrl: `http://localhost:${srv.port}`, model: "test" };
-      const r = await interpret("Which carrier has the highest delay rate?", { meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai });
+      const r = await interpret(QUESTION, deps(ai));
       expect(r).toMatchObject({ tool: "query", source: "llm", reasoning: "carrier ranking", args: { metric: "delay_rate", groupBy: "carrier" } });
     } finally {
       srv.stop(true);
@@ -145,14 +138,10 @@ describe("LLM path", () => {
   });
 
   test("an invalid tool call falls back to rules and says why", async () => {
-    const srv = stub(() =>
-      Response.json({
-        choices: [{ message: { tool_calls: [{ function: { name: "run_query", arguments: JSON.stringify({ reasoning: "x", metric: "bogus" }) } }] } }],
-      }),
-    );
+    const srv = stub(() => reply({ reasoning: "x", metric: "bogus" }));
     try {
       const ai = { apiKey: "test-key", baseUrl: `http://localhost:${srv.port}`, model: "test" };
-      const r = await interpret("Which carrier has the highest delay rate?", { meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai });
+      const r = await interpret(QUESTION, deps(ai));
       expect(r.source).toBe("rules");
       expect(r.reasoning).toBe("Matched “delay rate”, grouped by carrier. (AI unavailable, used keyword matching.)");
     } finally {
@@ -164,11 +153,110 @@ describe("LLM path", () => {
     const srv = stub(() => new Response("nope", { status: 500 }));
     try {
       const ai = { apiKey: "test-key", baseUrl: `http://localhost:${srv.port}`, model: "test" };
-      const r = await interpret("Which carrier has the highest delay rate?", { meta: dataset.meta, schemas: buildSchemas(dataset.meta), ai });
+      const r = await interpret(QUESTION, deps(ai));
       expect(r).toMatchObject({ tool: "query", source: "rules" });
       expect(r.reasoning).toEndWith("(AI unavailable, used keyword matching.)");
     } finally {
       srv.stop(true);
     }
+  });
+
+  test("a repeated question (any case or spacing) makes no second LLM call", async () => {
+    let calls = 0;
+    const srv = stub(() => {
+      calls++;
+      return reply(CARRIER);
+    });
+    const keyed = createServer(dataset, { apiKey: "k", baseUrl: `http://localhost:${srv.port}`, model: "test" }, 0);
+    try {
+      const first = await jsonOf(await post("/api/ask", { question: QUESTION }, `http://localhost:${keyed.port}`));
+      const second = await jsonOf(await post("/api/ask", { question: `  ${QUESTION.toUpperCase()} ` }, `http://localhost:${keyed.port}`));
+      expect(calls).toBe(1);
+      expect(first.interpretation.source).toBe("llm");
+      expect(second.interpretation.source).toBe("llm");
+    } finally {
+      keyed.stop(true);
+      srv.stop(true);
+    }
+  });
+
+  test("failures are not cached, and health shows aiStatus failing until the next success", async () => {
+    let calls = 0;
+    const srv = stub(() => (calls++ === 0 ? new Response("down", { status: 503 }) : reply(CARRIER)));
+    const keyed = createServer(dataset, { apiKey: "k", baseUrl: `http://localhost:${srv.port}`, model: "test-model" }, 0);
+    const origin = `http://localhost:${keyed.port}`;
+    try {
+      const first = await jsonOf(await post("/api/ask", { question: QUESTION }, origin));
+      expect(first.interpretation.source).toBe("rules");
+      expect(await jsonOf(await fetch(`${origin}/api/health`))).toEqual({ ok: true, aiMode: "llm", model: "test-model", aiStatus: "failing" });
+
+      const second = await jsonOf(await post("/api/ask", { question: QUESTION }, origin));
+      expect(second.interpretation.source).toBe("llm");
+      expect(calls).toBe(2);
+      expect((await jsonOf(await fetch(`${origin}/api/health`))).aiStatus).toBe("ok");
+    } finally {
+      keyed.stop(true);
+      srv.stop(true);
+    }
+  });
+
+  test("with a key, /api/ask is limited to 20 questions a minute per IP; rules mode is not", async () => {
+    const srv = stub(() => reply(CARRIER));
+    const keyed = createServer(dataset, { apiKey: "k", baseUrl: `http://localhost:${srv.port}`, model: "test" }, 0);
+    try {
+      for (let i = 0; i < 20; i++) expect((await post("/api/ask", { question: QUESTION }, `http://localhost:${keyed.port}`)).status).toBe(200);
+      const limited = await post("/api/ask", { question: QUESTION }, `http://localhost:${keyed.port}`);
+      expect(limited.status).toBe(429);
+      expect(await jsonOf(limited)).toEqual({ error: "Too many questions, try again in a minute." });
+      // Other routes are not limited.
+      expect((await fetch(`http://localhost:${keyed.port}/api/health`)).status).toBe(200);
+    } finally {
+      keyed.stop(true);
+      srv.stop(true);
+    }
+    for (let i = 0; i < 25; i++) expect((await post("/api/ask", { question: QUESTION })).status).toBe(200);
+  });
+
+  test("a status filter that only restates the metric is dropped before the query runs", async () => {
+    const srv = stub(() =>
+      reply({ reasoning: "delayed by week", metric: "delayed_count", filters: { status: ["delayed"] }, timeGrain: "week", dateRange: { last: 3, unit: "month" } }),
+    );
+    const keyed = createServer(dataset, { apiKey: "k", baseUrl: `http://localhost:${srv.port}`, model: "test" }, 0);
+    try {
+      const body = await jsonOf(await post("/api/ask", { question: "Show delayed orders by week for the last 3 months" }, `http://localhost:${keyed.port}`));
+      expect(body.interpretation.args).toEqual({ metric: "delayed_count", timeGrain: "week", dateRange: { last: 3, unit: "month" } });
+      expect(body.answer).not.toContain("with status");
+    } finally {
+      keyed.stop(true);
+      srv.stop(true);
+    }
+  });
+
+  test("limit 1 is dropped, so the ranking keeps every carrier and the answer names the leader", async () => {
+    const srv = stub(() => reply({ reasoning: "carrier ranking", metric: "delay_rate", groupBy: "carrier", sort: "desc", limit: 1 }));
+    const keyed = createServer(dataset, { apiKey: "k", baseUrl: `http://localhost:${srv.port}`, model: "test" }, 0);
+    try {
+      const body = await jsonOf(await post("/api/ask", { question: "Which carrier has the highest delay rate?" }, `http://localhost:${keyed.port}`));
+      expect(body.interpretation.args).toEqual({ metric: "delay_rate", groupBy: "carrier", sort: "desc" });
+      expect(body.query.rows.length).toBeGreaterThan(1);
+      expect(body.answer).toContain("Among carriers with 20+ orders");
+    } finally {
+      keyed.stop(true);
+      srv.stop(true);
+    }
+  });
+});
+
+describe("tidyQuery", () => {
+  const llm = (args: object): Interpretation => ({ tool: "query", source: "llm", reasoning: "r", args: args as QuerySpec });
+
+  test("keeps a limit above 1 and a status filter that adds to the metric", () => {
+    const a = { metric: "delayed_count", groupBy: "carrier", limit: 3, filters: { status: ["delayed", "exception"] } } as const;
+    expect(tidyQuery(llm(a))).toMatchObject({ args: a });
+  });
+
+  test("leaves non-query interpretations alone", () => {
+    const rules: Interpretation = { tool: "unsupported", source: "rules", reasoning: "no" };
+    expect(tidyQuery(rules)).toBe(rules);
   });
 });

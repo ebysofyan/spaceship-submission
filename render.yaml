@@ -10,6 +10,8 @@ services:
       - key: AI_API_KEY
         sync: false
       - key: AI_BASE_URL
-        value: https://api.openai.com/v1
+        value: https://ai.sumopod.com/v1
       - key: AI_MODEL
-        value: gpt-4o-mini
+        value: gpt-6-luna
+      - key: AI_REASONING_EFFORT
+        value: none

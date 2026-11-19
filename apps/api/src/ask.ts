@@ -1,4 +1,13 @@
-import { runForecast, runQuery, type AskResponse, type Interpretation, type MetaResponse, type Order } from "@app/core";
+import {
+  runForecast,
+  runQuery,
+  type AskResponse,
+  type Interpretation,
+  type MetaResponse,
+  type Metric,
+  type Order,
+  type Status,
+} from "@app/core";
 import { interpretWithLlm, type AiConfig } from "./ai/llm";
 import { interpretRules } from "./ai/rules";
 import { answerForecast, answerQuery, refusalAnswer } from "./ai/answer";
@@ -8,24 +17,67 @@ import type { Schemas } from "./ai/schemas";
 export class InputError extends Error {}
 
 const MAX_QUESTION_CHARS = 500;
+const CACHE_LIMIT = 500;
+
+// Per server instance. Only successful LLM interpretations are cached; rules and failures are not.
+export interface AiState {
+  cache: Map<string, Interpretation>;
+  lastAttemptFailed: boolean;
+}
 
 export interface AskDeps {
   orders: Order[];
   meta: MetaResponse;
   schemas: Schemas;
   ai: AiConfig;
+  state: AiState;
+}
+
+// The metric already implies its status: a status filter that restates it changes nothing, so drop it.
+const IMPLIED_STATUS: Partial<Record<Metric, Status>> = { delayed_count: "delayed", delivered_count: "delivered" };
+
+// The LLM sometimes restates the metric as a filter, or sets limit 1. One bar is not a chart, and the answer names the leader.
+export function tidyQuery(i: Interpretation): Interpretation {
+  if (i.tool !== "query") return i;
+  const { filters, limit, ...args } = i.args;
+  const implied = IMPLIED_STATUS[args.metric];
+  let kept = filters;
+  // Only when the status filter is exactly the implied status: a wider list changes which rows count.
+  if (implied && filters?.status?.every((s) => s === implied)) {
+    const { status: _, ...others } = filters;
+    kept = others;
+  }
+  return {
+    tool: "query",
+    source: i.source,
+    reasoning: i.reasoning,
+    args: {
+      ...args,
+      ...(kept && Object.keys(kept).length ? { filters: kept } : {}),
+      ...(limit !== undefined && limit > 1 ? { limit } : {}),
+    },
+  };
 }
 
 // One reasoning string per interpretation. It is user-visible, so it stays in plain English.
 export async function interpret(
   question: string,
-  deps: Pick<AskDeps, "meta" | "schemas" | "ai">,
+  deps: Pick<AskDeps, "meta" | "schemas" | "ai" | "state">,
 ): Promise<Interpretation> {
   // Rules mode is the normal mode without a key, not a failure.
   if (!deps.ai.apiKey) return interpretRules(question, deps.meta);
+  const { cache } = deps.state;
+  const key = question.trim().toLowerCase();
+  const cached = cache.get(key);
+  if (cached) return cached;
   try {
-    return await interpretWithLlm(question, deps.meta, deps.schemas, deps.ai);
+    const llm = tidyQuery(await interpretWithLlm(question, deps.meta, deps.schemas, deps.ai));
+    deps.state.lastAttemptFailed = false;
+    if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value as string); // drop oldest
+    cache.set(key, llm);
+    return llm;
   } catch (e) {
+    deps.state.lastAttemptFailed = true;
     console.warn("LLM interpreter failed, using keyword matching:", e);
     const rules = interpretRules(question, deps.meta);
     return { ...rules, reasoning: `${rules.reasoning} (AI unavailable, used keyword matching.)` };
