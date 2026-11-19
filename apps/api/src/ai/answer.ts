@@ -87,12 +87,22 @@ function when(q: QueryResult, data: Range): string {
   return `from ${spanText(r)}`;
 }
 
-// The filters the query applied, e.g. "for FedEx and UPS". `except` skips a dimension already named elsewhere.
+// The filters the query applied, read as prepositions: "from London, UK", "to Leeds, UK", "for FedEx and UPS", "with status in transit".
+// `except` skips a dimension already named elsewhere.
+const PREPOSITION: Partial<Record<Dimension, string>> = {
+  origin_city: "from",
+  destination_city: "to",
+  status: "with status",
+};
 function who(q: QueryResult, except?: Dimension): string {
-  const values = Object.entries(q.spec.filters ?? {})
-    .filter(([dim]) => dim !== except)
-    .flatMap(([, v]) => v ?? []);
-  return values.length ? `for ${listAnd(values)}` : "";
+  const byPreposition = new Map<string, string[]>();
+  for (const [dim, values] of Object.entries(q.spec.filters ?? {})) {
+    if (dim === except || !values?.length) continue;
+    const prep = PREPOSITION[dim as Dimension] ?? "for";
+    const names = values.map((v) => (dim === "status" ? v.replace("_", " ") : v));
+    byPreposition.set(prep, [...(byPreposition.get(prep) ?? []), ...names]);
+  }
+  return [...byPreposition].map(([prep, names]) => `${prep} ${listAnd(names)}`).join(" ");
 }
 
 // One result, one sentence. Each entry gets its value, base, filter phrase and period.
@@ -103,7 +113,7 @@ const SCALAR: Record<Metric, Scalar> = {
   delayed_count: (v, _b, w, t) => join(`${plural(v, "order")} ${be(v)} delayed`, w, t),
   units: (v, _b, w, t) => join(`${plural(v, "unit")} ${be(v)} shipped`, w, t),
   on_time_rate: (v, b, w, t) => join(join("On-time rate", w), `was ${pct(v)} (${Math.round(v * b)} of ${b} orders)`, t),
-  delay_rate: (v, b, w, t) => join(join("Delay rate", w), `was ${pct(v)} (${Math.round(v * b)} of ${b} orders)`, t),
+  delay_rate: (v, b, w, t) => join(join("Delay rate (delayed + exception)", w), `was ${pct(v)} (${Math.round(v * b)} of ${b} orders)`, t),
   avg_delivery_days: (v, b, w, t) =>
     join(join("Average delivery time", w), `was ${days(v)} across ${baseText("avg_delivery_days", b)}`, t),
   revenue: (v, _b, w, t) => `${join(join("Revenue", w), `was ${money(v)}`, t)} (gross, before promo discounts)`,

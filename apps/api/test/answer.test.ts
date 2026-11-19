@@ -18,7 +18,7 @@ const query = (spec: QuerySpec) => answerQuery(runQuery(orders, spec), meta.date
 describe("answer templates", () => {
   test("carrier delay rate: the top group, its base, and the leader among bigger groups", () => {
     expect(say("Which carrier has the highest delay rate?")).toBe(
-      "GLS has the highest delay rate at 37.5% in 2025, but on only 8 orders. Among carriers with 20+ orders, USPS is highest at 25.5% (12 of 47).",
+      "GLS has the highest delay rate (delayed + exception) at 37.5% in 2025, but on only 8 orders. Among carriers with 20+ orders, USPS is highest at 25.5% (12 of 47).",
     );
   });
 
@@ -85,8 +85,18 @@ describe("answer templates", () => {
 
   test("average delivery time caveat names completed deliveries and drops the 'of' count", () => {
     expect(say("average delivery time by carrier")).toBe(
-      "GLS has the highest avg delivery days at 5.13 days in 2025, but on only 8 completed deliveries. Among carriers with 20+ completed deliveries, USPS is highest at 4.64 days.",
+      "GLS has the highest average delivery time at 5.13 days in 2025, but on only 8 completed deliveries. Among carriers with 20+ completed deliveries, USPS is highest at 4.64 days.",
     );
+  });
+
+  test("a status count names the status, not a filter", () => {
+    expect(say("How many orders were canceled?")).toBe("3 orders were placed with status canceled in 2025.");
+  });
+
+  test("origin and destination filters read as from and to, other filters keep for", () => {
+    expect(say("show orders from London")).toBe("54 orders were placed from London, UK in 2025.");
+    expect(say("deliveries to Leeds")).toBe("11 orders were delivered to Leeds, UK in 2025.");
+    expect(say("How many orders did FedEx deliver in October?")).toBe("6 orders were delivered for FedEx in October 2025.");
   });
 
   test("money series says highest, not busiest", () => {

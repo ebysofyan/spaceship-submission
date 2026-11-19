@@ -55,6 +55,13 @@ const SCAN_DIMS: Dimension[] = [
   "client_id",
 ];
 
+// Status words become status filters, not metrics. "delayed", "delivered" and "late" are metric words, so they are absent.
+const STATUS_WORDS: Array<[string, RegExp]> = [
+  ["canceled", /\bcancel+ed\b/i],
+  ["in_transit", /\bin[- ]transit\b/i],
+  ["exception", /\bexceptions?\b/i],
+];
+
 const valuesOf = (meta: MetaResponse, dim: Dimension): string[] =>
   dim === "sku" ? meta.skus.map((s) => s.sku) : (meta.values[dim] ?? []);
 
@@ -101,6 +108,36 @@ function extractFilters(question: string, meta: MetaResponse): { filters: Filter
     add(dim, value);
     rest = rest.replace(re, " ".repeat(m[0].length));
   }
+  for (const [value, re] of STATUS_WORDS) {
+    const m = rest.match(re);
+    if (m) {
+      add("status", value);
+      rest = rest.replace(re, " ".repeat(m[0].length));
+    }
+  }
+
+  // Cities by short name: "London" is "London, UK". "from X" is an origin, "to X" a destination; a bare name goes to the list that has it.
+  const cities = new Set([...valuesOf(meta, "origin_city"), ...valuesOf(meta, "destination_city")]);
+  for (const value of cities) {
+    const re = new RegExp(`(?<![\\w-])(?:(from|to)\\s+)?${escapeRe(value.split(",")[0])}(?![\\w-])`, "i");
+    const m = rest.match(re);
+    if (!m) continue;
+    let dim: Dimension = valuesOf(meta, "destination_city").includes(value) ? "destination_city" : "origin_city";
+    if (m[1]) {
+      dim = same(m[1], "from") ? "origin_city" : "destination_city";
+      // A city on the wrong side of the phrase is refused here, not left for core to reject with its full value list.
+      if (!valuesOf(meta, dim).includes(value)) {
+        const short = value.split(",")[0];
+        const error =
+          dim === "destination_city"
+            ? `No orders ship to ${short}. ${value} is an origin city; try “orders from ${short}”.`
+            : `No orders ship from ${short}. ${value} is a destination city; try “orders to ${short}”.`;
+        return { filters, rest, error };
+      }
+    }
+    add(dim, value);
+    rest = rest.replace(re, " ".repeat(m[0].length));
+  }
   return { filters, rest };
 }
 
@@ -120,8 +157,15 @@ const METRIC_WORDS: Array<[Metric, RegExp]> = [
   ["avg_order_value", /\b(aov|average order|avg order)\b/],
   ["revenue", /\b(revenue|sales|income|order value)\b/],
   ["units", /\b(units?|quantity|quantities|pieces)\b/],
-  ["delivered_count", /\bdelivered\b/],
+  ["delivered_count", /\b(delivered|delivers?|deliveries|delivery)\b/],
   ["order_count", /\b(orders?|volume|count)\b/],
+];
+
+// Superlatives with no measure: "reliable" and "worst" are about delivery outcomes, "slowest" about time.
+const SUPERLATIVES: Array<[Metric, RegExp]> = [
+  ["on_time_rate", /\b(reliable|best)\b/],
+  ["delay_rate", /\b(worst|unreliable)\b/],
+  ["avg_delivery_days", /\b(slowest|fastest)\b/],
 ];
 
 function detectMetric(q: string): Hit<Metric> | undefined {
@@ -226,27 +270,45 @@ function queryRules(rest: string, filters: Filters, meta: MetaResponse): Interpr
   const badRange = q.match(UNSUPPORTED_RANGE);
   if (badRange) return unsupported(`“${badRange[0]}” isn't supported yet; try a month name or “last 3 months”.`);
 
-  // A carrier, region or warehouse with no measure ("how is FedEx doing") gets the on-time rate.
-  const named = PLACE_DIMS.some((d) => filters[d]?.length);
-  const metric = detectMetric(q) ?? (named ? { value: "on_time_rate" as const, match: "" } : undefined);
+  // With no measure named: a status filter counts orders, and a carrier, region or warehouse gets the on-time rate ("how is FedEx doing").
+  const fallback: Metric | undefined = filters.status?.length
+    ? "order_count"
+    : PLACE_DIMS.some((d) => filters[d]?.length)
+      ? "on_time_rate"
+      : undefined;
+  const metric = detectMetric(q) ?? firstHit(q, SUPERLATIVES) ?? (fallback ? { value: fallback, match: "" } : undefined);
   if (!metric) return unsupported("I couldn't tell which measure you mean.");
 
   const grain = firstHit(q, GRAINS);
   const range = detectRange(q, meta.anchorDate);
   // Two or more values of one dimension ("UPS and FedEx", "EU vs UK") compare them, grouped by that dimension.
   const compared = (Object.keys(filters) as Dimension[]).find((d) => (filters[d]?.length ?? 0) > 1);
-  const groupDim = grain ? undefined : (firstHit(rest, DIM_REGEXES)?.value ?? compared);
+  // The first dimension named in the question is the grouping.
+  const mentions = DIM_REGEXES.flatMap(([dim, re]) => {
+    const m = rest.match(re);
+    return m?.index === undefined ? [] : [{ dim, start: m.index, end: m.index + m[0].length }];
+  }).sort((a, b) => a.start - b.start);
+  const [first, ...others] = mentions;
+  const groupDim = grain ? undefined : (first?.dim ?? compared);
+  // One grouping per question: a later dimension is dropped, and the reasoning says so. "origin city" is one mention.
+  const dropped = first !== undefined && others.some((x) => x.start >= first.end);
 
   const spec: QuerySpec = { metric: metric.value };
-  const parts = [metric.match ? `Matched “${metric.match}”` : "No measure named, so on-time rate"];
+  const parts = [
+    metric.match
+      ? `Matched “${metric.match}”`
+      : `No measure named, so ${metric.value === "order_count" ? "order count" : "on-time rate"}`,
+  ];
   if (grain) {
     spec.timeGrain = grain.value;
     parts.push(`by ${grain.value}`);
   }
   if (groupDim) {
     spec.groupBy = groupDim;
-    spec.sort = /\b(lowest|least|fewest|smallest|bottom)\b/.test(q) ? "asc" : "desc";
-    parts.push(`grouped by ${words(groupDim)}`);
+    spec.sort = /\b(lowest|least|fewest|smallest|bottom|fastest)\b/.test(q) ? "asc" : "desc";
+    parts.push(
+      dropped ? `one grouping per question, so grouped by ${words(groupDim)} only` : `grouped by ${words(groupDim)}`,
+    );
   }
   const limit = rowLimit(q);
   if (limit) {
@@ -286,6 +348,7 @@ function forecastRules(question: string, meta: MetaResponse): Interpretation {
 
   const months = question.match(/\b(\d+)\s+months?\b/i);
   const horizonMonths = months ? Number(months[1]) : 4;
+  if (horizonMonths < 1 || horizonMonths > 12) return unsupported("Forecasts cover 1 to 12 months.");
   return {
     tool: "forecast",
     args: { target, horizonMonths },
@@ -294,7 +357,10 @@ function forecastRules(question: string, meta: MetaResponse): Interpretation {
   };
 }
 
+const PROMO = /\bpromo(?:s|tions?)?\b/i;
+
 export function interpretRules(question: string, meta: MetaResponse): Interpretation {
+  if (PROMO.test(question)) return unsupported("Promotions aren't a supported filter yet.");
   const { filters, rest, error } = extractFilters(question, meta);
   if (error) return unsupported(error);
   if (FORECAST_WORDS.test(question)) return forecastRules(question, meta);

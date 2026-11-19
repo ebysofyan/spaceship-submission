@@ -89,6 +89,13 @@ describe("runForecast warnings and errors", () => {
     );
   });
 
+  test("explanation rounds to whole units and says months correctly", () => {
+    const one = runForecast(orders, { ...ALL, horizonMonths: 1 }).recommendation;
+    expect(one.explanation).toContain(`about ${Math.round(one.forecastUnits)} units of all products over the next 1 month.`);
+    expect(one.explanation).toContain(`Safety stock of ${Math.round(one.safetyStock)} units`);
+    expect(runForecast(orders, ALL).recommendation.explanation).toContain("over the next 4 months.");
+  });
+
   test("invalid horizon throws", () => {
     for (const horizonMonths of [0, 13, 2.5, Number.NaN]) {
       expect(() => runForecast(orders, { target: { kind: "all" }, horizonMonths })).toThrow();

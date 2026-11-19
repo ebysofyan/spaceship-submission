@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { runQuery } from "@app/core";
 import { loadDataset } from "../src/data";
 import { interpretRules } from "../src/ai/rules";
 
-const { meta } = await loadDataset();
+const { meta, orders } = await loadDataset();
 const route = (q: string) => interpretRules(q, meta);
 
 describe("rules router", () => {
@@ -180,5 +181,117 @@ describe("rules router", () => {
         args: { metric: "on_time_rate", filters: { carrier: ["FedEx"] } },
       });
     }
+  });
+
+  test("canceled is a status filter, and the count is 3", () => {
+    const r = route("How many orders were canceled?");
+    expect(r).toMatchObject({ tool: "query", args: { metric: "order_count", filters: { status: ["canceled"] } } });
+    expect(r.tool === "query" && runQuery(orders, r.args).value).toBe(3);
+  });
+
+  test("in transit is a status filter, and the count is 27", () => {
+    const r = route("How many orders are in transit?");
+    expect(r).toMatchObject({ tool: "query", args: { metric: "order_count", filters: { status: ["in_transit"] } } });
+    expect(r.tool === "query" && runQuery(orders, r.args).value).toBe(27);
+  });
+
+  test("exceptions by carrier: status filter, grouped by carrier, counting orders", () => {
+    expect(route("show me exceptions by carrier")).toMatchObject({
+      tool: "query",
+      args: { metric: "order_count", groupBy: "carrier", filters: { status: ["exception"] } },
+    });
+  });
+
+  test("from a city is an origin, to a city is a destination, full names still work", () => {
+    expect(route("show orders from London")).toMatchObject({
+      tool: "query",
+      args: { metric: "order_count", filters: { origin_city: ["London, UK"] } },
+    });
+    expect(route("orders to London")).toEqual({
+      tool: "unsupported",
+      source: "rules",
+      reasoning: "No orders ship to London. London, UK is an origin city; try “orders from London”.",
+    });
+    expect(route("deliveries to Leeds")).toMatchObject({
+      tool: "query",
+      args: { metric: "delivered_count", filters: { destination_city: ["Leeds, UK"] } },
+    });
+    expect(route("orders from London, UK")).toMatchObject({
+      tool: "query",
+      args: { filters: { origin_city: ["London, UK"] } },
+    });
+  });
+
+  test("a city on the wrong side of to or from is refused with a hint, not sent to core", () => {
+    expect(route("deliveries from Leeds")).toEqual({
+      tool: "unsupported",
+      source: "rules",
+      reasoning: "No orders ship from Leeds. Leeds, UK is a destination city; try “orders to Leeds”.",
+    });
+  });
+
+  test("deliver as a verb counts deliveries, while delivery time stays a time", () => {
+    expect(route("How many orders did FedEx deliver in October?")).toMatchObject({
+      tool: "query",
+      args: {
+        metric: "delivered_count",
+        filters: { carrier: ["FedEx"] },
+        dateRange: { from: "2025-10-01", to: "2025-10-31" },
+      },
+    });
+    expect(route("delivery time for DHL")).toMatchObject({
+      args: { metric: "avg_delivery_days" },
+    });
+  });
+
+  test("several groupings: the first named is used, and the reasoning says the rest were dropped", () => {
+    const r = route("orders by carrier and region");
+    expect(r).toMatchObject({ tool: "query", args: { groupBy: "carrier" } });
+    expect(r.reasoning).toBe("Matched “orders”, one grouping per question, so grouped by carrier only.");
+  });
+
+  test("reliable and best mean the on-time rate by carrier, highest first", () => {
+    for (const q of ["Which carrier is the most reliable?", "Which carrier is the best?"]) {
+      expect(route(q)).toMatchObject({
+        tool: "query",
+        args: { metric: "on_time_rate", groupBy: "carrier", sort: "desc" },
+      });
+    }
+  });
+
+  test("worst and unreliable mean the delay rate by carrier, highest first", () => {
+    for (const q of ["Which carrier is the worst?", "Which carrier is the most unreliable?"]) {
+      expect(route(q)).toMatchObject({
+        tool: "query",
+        args: { metric: "delay_rate", groupBy: "carrier", sort: "desc" },
+      });
+    }
+  });
+
+  test("slowest and fastest mean delivery time by warehouse", () => {
+    expect(route("Which warehouse is slowest?")).toMatchObject({
+      tool: "query",
+      args: { metric: "avg_delivery_days", groupBy: "warehouse", sort: "desc" },
+    });
+    expect(route("Which warehouse is fastest?")).toMatchObject({
+      tool: "query",
+      args: { metric: "avg_delivery_days", groupBy: "warehouse", sort: "asc" },
+    });
+  });
+
+  test("promotions are refused, not answered without the filter", () => {
+    expect(route("promo orders count")).toEqual({
+      tool: "unsupported",
+      source: "rules",
+      reasoning: "Promotions aren't a supported filter yet.",
+    });
+  });
+
+  test("forecasts beyond 12 months are refused with the range, not the core error", () => {
+    expect(route("predict demand for next 24 months")).toEqual({
+      tool: "unsupported",
+      source: "rules",
+      reasoning: "Forecasts cover 1 to 12 months.",
+    });
   });
 });

@@ -194,7 +194,7 @@ export function runForecast(orders: Order[], spec: ForecastSpec): ForecastResult
       forecastUnits,
       safetyStock,
       recommendedInventory,
-      explanation: `Expect about ${forecastUnits} units of ${label} over the next ${horizon} month(s). Safety stock of ${safetyStock} units covers demand swings at a ${pct}% service level, so stock ${recommendedInventory} units.`,
+      explanation: `Expect about ${Math.round(forecastUnits)} units of ${label} over the next ${horizon} ${horizon === 1 ? "month" : "months"}. Safety stock of ${Math.round(safetyStock)} units covers demand swings at a ${pct}% service level, so stock ${recommendedInventory} units.`,
     },
     warnings,
   };

@@ -52,7 +52,7 @@ export const METRIC_DEFS: Record<Metric, MetricDef> = {
     },
   },
   delay_rate: {
-    label: "Delay rate",
+    label: "Delay rate (delayed + exception)",
     definition: "(delayed + exception) / (delivered + delayed + exception)",
     isRate: true,
     compute: (o) => {
@@ -61,7 +61,7 @@ export const METRIC_DEFS: Record<Metric, MetricDef> = {
     },
   },
   avg_delivery_days: {
-    label: "Avg delivery days",
+    label: "Average delivery time",
     definition: "AVG(delivery_date - order_date) over delivered + delayed + exception",
     isRate: false,
     compute: (o) => {
