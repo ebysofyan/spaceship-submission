@@ -28,3 +28,6 @@ export const TOOLTIP_STYLE: CSSProperties = {
   fontSize: 12,
   boxShadow: "var(--shadow-float)",
 };
+
+// Tooltip rows default to the series colour (neon green on white is unreadable); ink overrides it.
+export const TOOLTIP_ITEM_STYLE: CSSProperties = { color: "var(--color-ink)" };

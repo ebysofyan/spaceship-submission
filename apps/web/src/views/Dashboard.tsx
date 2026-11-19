@@ -3,7 +3,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import type { DashboardResponse, Kpis, MetaResponse, Metric, QueryResult } from "@app/core";
 import { getDashboard } from "../api";
 import { useAsync } from "../hooks";
-import { AXIS_TICK, CHART, LEGEND_LABEL, TOOLTIP_STYLE } from "../components/chartTheme";
+import { AXIS_TICK, CHART, LEGEND_LABEL, TOOLTIP_ITEM_STYLE, TOOLTIP_STYLE } from "../components/chartTheme";
 import { DeliveryTable, ResultTable } from "../components/DataTables";
 import { DynamicChart } from "../components/DynamicChart";
 import { Card, CardHeader } from "../components/ui/Card";
@@ -145,7 +145,7 @@ function DeliveryChart({ rows }: { rows: DashboardResponse["deliveryPerformanceB
         <CartesianGrid vertical={false} stroke={CHART.grid} />
         <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" minTickGap={16} />
         <YAxis {...axisProps} width={40} allowDecimals={false} />
-        <Tooltip cursor={{ fill: CHART.hover }} contentStyle={TOOLTIP_STYLE} />
+        <Tooltip cursor={{ fill: CHART.hover }} contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} labelStyle={LEGEND_LABEL} />
         <Bar dataKey="onTime" name="On time" stackId="delivery" fill={CHART.bar} stroke={CHART.barEdge} maxBarSize={36} />
         <Bar dataKey="delayed" name="Delayed" stackId="delivery" fill={CHART.delayed} maxBarSize={36} />

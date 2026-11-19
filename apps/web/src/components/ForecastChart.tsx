@@ -1,7 +1,7 @@
 import { Area, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { ForecastResult } from "@app/core";
 import { formatInt, formatKey } from "../format";
-import { AXIS_TICK, CHART, LEGEND_LABEL, TOOLTIP_STYLE } from "./chartTheme";
+import { AXIS_TICK, CHART, LEGEND_LABEL, TOOLTIP_ITEM_STYLE, TOOLTIP_STYLE } from "./chartTheme";
 
 // History solid, forecast dashed, shaded lower–upper band, divider at the last actual month.
 export function ForecastChart({ result, height = 300 }: { result: ForecastResult; height?: number }) {
@@ -31,6 +31,7 @@ export function ForecastChart({ result, height = 300 }: { result: ForecastResult
         <YAxis {...axisProps} width={44} tickFormatter={(v: number) => formatInt(v)} allowDecimals={false} />
         <Tooltip
           contentStyle={TOOLTIP_STYLE}
+          itemStyle={TOOLTIP_ITEM_STYLE}
           formatter={(v: unknown) => (Array.isArray(v) ? `${formatInt(v[0])}–${formatInt(v[1])} units` : `${formatInt(Number(v))} units`)}
         />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} labelStyle={LEGEND_LABEL} />

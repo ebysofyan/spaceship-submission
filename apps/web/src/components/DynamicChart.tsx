@@ -2,7 +2,7 @@ import { useId } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { QueryResult } from "@app/core";
 import { formatInt, formatKey, formatMetric } from "../format";
-import { AXIS_TICK, CHART, TOOLTIP_STYLE } from "./chartTheme";
+import { AXIS_TICK, CHART, TOOLTIP_ITEM_STYLE, TOOLTIP_STYLE } from "./chartTheme";
 import { ResultTable } from "./DataTables";
 import { EmptyState } from "./ui/States";
 
@@ -59,7 +59,7 @@ export function DynamicChart({ result, height = 260 }: { result: QueryResult; he
           <CartesianGrid vertical={false} stroke={CHART.grid} />
           <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" minTickGap={16} />
           <YAxis {...axisProps} width={56} tickFormatter={axisFmt} allowDecimals={allowDecimals} />
-          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={tipValue} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} formatter={tipValue} />
           <Area type="linear" dataKey="value" name={metricLabel} stroke={CHART.line} strokeWidth={2} fill={`url(#${gradientId})`} />
         </AreaChart>
       </ResponsiveContainer>
@@ -73,7 +73,7 @@ export function DynamicChart({ result, height = 260 }: { result: QueryResult; he
           <CartesianGrid vertical={false} stroke={CHART.grid} />
           <XAxis dataKey="label" {...axisProps} interval={0} />
           <YAxis {...axisProps} width={56} tickFormatter={axisFmt} allowDecimals={allowDecimals} />
-          <Tooltip cursor={{ fill: CHART.hover }} contentStyle={TOOLTIP_STYLE} formatter={tipValue} />
+          <Tooltip cursor={{ fill: CHART.hover }} contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} formatter={tipValue} />
           <Bar dataKey="value" name={metricLabel} fill={CHART.bar} stroke={CHART.barEdge} radius={[4, 4, 0, 0]} maxBarSize={48} />
         </BarChart>
       </ResponsiveContainer>
@@ -86,8 +86,17 @@ export function DynamicChart({ result, height = 260 }: { result: QueryResult; he
         <CartesianGrid horizontal={false} stroke={CHART.grid} />
         <XAxis type="number" {...axisProps} tickFormatter={axisFmt} domain={[0, rateTop ?? "auto"]} ticks={rateTicks} />
         <YAxis type="category" dataKey="label" {...axisProps} width={96} interval={0} />
-        <Tooltip cursor={{ fill: CHART.hover }} contentStyle={TOOLTIP_STYLE} formatter={tipValue} />
-        <Bar dataKey="value" name={metricLabel} fill={CHART.bar} stroke={CHART.barEdge} radius={[0, 4, 4, 0]} barSize={18}>
+        <Tooltip cursor={{ fill: CHART.hover }} contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} formatter={tipValue} />
+        <Bar
+          dataKey="value"
+          name={metricLabel}
+          fill={CHART.bar}
+          stroke={CHART.barEdge}
+          radius={[0, 4, 4, 0]}
+          barSize={18}
+          // shortcut: Recharts 3.11 leaves layout="vertical" bars unpainted once the entry animation ends (hover repaints them); animation off for this branch only, re-enable when upgrading past 3.11 if fixed
+          isAnimationActive={false}
+        >
           <LabelList dataKey="text" position="right" fill={CHART.muted} fontSize={12} />
         </Bar>
       </BarChart>
