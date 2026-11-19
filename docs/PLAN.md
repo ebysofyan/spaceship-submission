@@ -137,5 +137,5 @@ Review pass after Phase D. Each item is one commit, listed with what it changed.
 - [x] W4 `0622caf` — hash deep links (`#ask?q=`, `#forecast?kind&value&h`), "Ask a follow-up" on dashboard charts, "Adjust in Forecast", slow-answer note after 4 s, mobile scroll to the answer.
 - [x] W5 `62b3434` — impeccable polish: plain KPI labels, quieter charts, colour-blind-safe exception colour, "AI on / AI fallback / Keyword mode" badge, forecast led by the recommendation, methodology as a list, band over forecast months only, consumed `#ask?q=` cleared.
 - [x] Coordinator `fa5fbfa` — forecast recommendation above the controls on mobile. Docs commit — a rejected AI reading (zod) is labelled "AI reading failed validation" and is not counted as an outage.
-- [x] Redeployed to Fly (image `deployment-01M7RZR7QBPJ9R560KJ4Q20968`); live checks in EVIDENCE.
+- [x] Redeployed to Fly (image `deployment-01M7S08SGR0HMMFFDBYPS7V6VZ`, from `7eb559c`); live checks in EVIDENCE.
 

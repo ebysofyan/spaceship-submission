@@ -1,6 +1,6 @@
 # Evidence — definition of done (requirements §14)
 
-Recorded 2026-11-19 on commit `fa5fbfa` plus the validation-label fix in the same docs commit, Bun 1.4.4, from the repo
+Recorded 2026-11-19 on commit `7eb559c` (live image built from it), Bun 1.4.4, from the repo
 root. This pass followed a review (P0 chart fix, abuse limits, security headers, baseline answers, tab links, polish).
 Outputs are trimmed from real runs. Sections marked **earlier run** were not re-run, because they need many live
 LLM calls, which cost money.
@@ -22,8 +22,8 @@ LLM calls, which cost money.
 ## §0 Docker — built by Fly's remote builder
 
 `fly deploy --remote-only` built the image from this repo's `Dockerfile` (97 MB).
-`fly status -a spaceship-logistics-eby` reports image `spaceship-logistics-eby:deployment-01M7RZR7QBPJ9R560KJ4Q20968`,
-machine `8577536c10ee18`, version 4, `1 total, 1 passing`. A local `docker build` was not run (daemon off).
+`fly status -a spaceship-logistics-eby` reports image `spaceship-logistics-eby:deployment-01M7S08SGR0HMMFFDBYPS7V6VZ`,
+machine `8577536c10ee18`, version 5, `1 total, 1 passing`. A local `docker build` was not run (daemon off).
 
 ## §1 Deployed URL — https://spaceship-logistics-eby.fly.dev
 
