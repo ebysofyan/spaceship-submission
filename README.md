@@ -6,6 +6,33 @@ A single-page analytics app over one read-only logistics dataset (400 orders, 20
 
 - **Data:** `data/mock_logistics_data.csv`, loaded once at boot, never written.
 - **Stack:** Bun 1.4 workspaces · Bun.serve (API + built web app) · Vite + React 19 + TypeScript · Tailwind CSS v4 · Recharts 3 · zod 4 · `bun test`
+- **Hosting:** Fly.io on pay-as-you-go billing (not a trial), one always-on machine, so the URL does not expire or cold-start during review.
+
+## How I approached it as a lead
+
+The brief rewards clarity, correctness and reasoning over polish, and it warns against over-engineering. I ran the project the way I would run a small team: settle what "correct" means first, fix the interfaces, build the risky core with tests, then review, prioritise and ship.
+
+1. **Turn the brief into a checklist.** `docs/requirements.md` splits MUST, SHOULD and BONUS items and ends with a definition of done. Every item there points to evidence in `docs/EVIDENCE.md`.
+2. **Decide the ambiguous definitions before writing code.** The brief does not define "delayed", which orders count in rates, what "last month" means for 2025 data, or the unit of demand. `docs/dataset.md` records each decision and the reference numbers (400 / 304 / 55 / 82.2% / 3.83 days). The dashboard, the Ask tool and the forecast all use the same definitions, and the tests check those numbers.
+3. **Fix the contract, then build in parallel.** `packages/core/src/types.ts` defines the query spec, the forecast spec and the results. With the contract fixed, core, API and web were built in parallel without waiting on each other (`docs/PLAN.md`).
+4. **Separate the three layers the brief names.** Business logic lives in `packages/core`: pure functions with no I/O and no AI. AI interpretation lives in `apps/api/src/ai`. Presentation lives in `apps/web`. Each layer can be tested and replaced on its own.
+5. **Review, prioritise, ship.** After the first deploy I ran an independent review of requirements, security, cost and UX. It produced P0–P2 tasks, each with an owner, the files it may touch and the evidence that proves it done. The review found a P0 that 154 passing tests had missed: one chart rendered blank in the browser. Since then, browser checks are part of the definition of done.
+
+### Decision log
+
+| Decision | Alternatives considered | Why | Trade-off accepted | Revisit when |
+|---|---|---|---|---|
+| The AI routes; it never answers | The LLM writes the answer, or writes SQL | The brief makes the AI an orchestrator, not a source of truth. Every number has to trace to a computation | Answer text comes from templates and is less fluent than model prose | Narrative summaries are needed: let the model narrate over computed JSON and check its numbers |
+| Typed spec + zod allow-lists, no SQL | Text-to-SQL with validation | Nothing to inject into, and each spec is unit-testable | Fixed set of 9 metrics, one grouping per question | Data outgrows memory: compile the same spec to parameterised SQL |
+| Rules router as the no-key default and the fallback | LLM only | The app works with no key, during an outage, and at zero cost | Keyword matching understands fewer phrasings, so it refuses rather than guesses | — |
+| CSV in memory, no database | Postgres | 400 read-only rows, deterministic results, nothing to operate | A changed CSV needs a restart | Live data, or more than about 100k rows |
+| One Bun process serves the API and the SPA | Next.js, or separate frontend hosting | One deploy, one URL, no CORS | No server rendering | SEO or multi-page needs |
+| Definitions fixed up front (status-based "delayed", 370 delivery base, data-anchored dates) | Wall-clock dates; lateness from lead time | The brief is ambiguous; one definition keeps all three surfaces consistent | May differ from the client's SLA | The client provides promised delivery dates |
+| Forecast: 3 simple methods, chosen by holdout MAE, category level by default | ARIMA or Prophet | The brief limits the methods, and most SKUs have only 1–2 orders | No seasonality | Two or more years of history |
+| Cost guardrails: cache, `max_tokens` 300, prompt trimmed from about 8k to 1.6k tokens, per-IP and global daily caps | Rely on a provider spend cap | The reviewers' URL must stay usable even if someone abuses it | Counters live in one process | More than one instance: move them to Redis |
+| Three tabs: Dashboard / Ask / Forecast, linked to each other | A single chat screen | They map to the brief's descriptive / diagnostic / predictive levels, and the dashboard needs no typing | More navigation, mitigated by follow-up links between tabs | User research says otherwise |
+
+**Deliberately not built** (simple but correct): authentication, a database, streaming answers, Redis, multi-dimension queries, and clarifying follow-up questions. Each is listed under Limitations or Future improvements with the trigger that would justify it.
 
 ## Setup
 
@@ -260,6 +287,6 @@ No secrets are in the repository. `.env*`, `node_modules`, `dist` and `.git` are
 
 ## AI usage disclosure
 
-This project was built with AI coding agents. A coordinating agent (Claude, running in pi) split the work into tasks and dispatched them to worker agents through Orca orchestration. The owner set the requirements and reviewed the results. Outputs were checked against `docs/dataset.md` and the test suite.
+This project was built with AI coding agents, and I worked as the lead. I set the requirements, the metric definitions and the architecture, and I accepted or rejected each change. A coordinating agent (Claude, running in pi) split the work into tasks with file ownership and dispatched them to worker agents through Orca orchestration. A later review pass (P0–P2 tasks, `docs/PLAN.md`) used the same setup, with the `impeccable` design skill for UI critique. Outputs were checked against `docs/dataset.md`, the test suite, and browser screenshots of the live app.
 
 At runtime the AI is optional. It only chooses a tool and its arguments. Every number comes from the deterministic core, and answer text is a template over those results.
