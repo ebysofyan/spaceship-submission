@@ -199,7 +199,7 @@ Delivery base = `delivered + delayed + exception` (370 orders). In-transit and c
 
 ## Limitations
 
-- **"Why" questions get the computed number, not a cause.** For example, "why were orders delayed in October" returns the count and breakdown. The data has no causal fields, so the app does not explain.
+- **"Why" questions get the computed number, not a cause.** For example, "why were orders delayed in October" returns the delayed count for October. The data has no causal fields, so the app does not explain.
 - **No SLA or promised delivery date.** Lateness is status-based only.
 - **Small, synthetic dataset.** 400 orders; some months have fewer than 20 (September has 18). Trends and forecasts are indicative, and the app says so.
 - **Forecasts are simple.** Three methods on 12 months, with no seasonality or external drivers. Per-SKU forecasts are unreliable for most SKUs.
@@ -209,7 +209,7 @@ Delivery base = `delivered + delayed + exception` (370 orders). In-transit and c
 - **Fixed metric set** of nine. No free-form SQL and no custom metrics.
 - **LLM quality is measured on 12 questions only.** The eval script costs money to run and is not part of `bun test`. Results can change with the model.
 - **Data is in memory and loaded at boot.** A changed CSV needs a restart.
-- **No authentication and no query history.** Anyone with the URL can call the API. The only rate limit is on `/api/ask` in LLM mode. It is in memory, per process, and resets on restart.
+- **No authentication; query history is per browser session only.** Anyone with the URL can call the API. The only rate limit is on `/api/ask` in LLM mode. It is in memory, per process, and resets on restart.
 
 ## Future improvements
 
@@ -234,12 +234,12 @@ Not automated: a live LLM call (use `eval-llm.ts`) and the browser UI.
 
 The app is one process. The Bun server handles `/api/*` and serves the built web app from `apps/web/dist`. The health check is `GET /api/health`.
 
-- **Fly.io** (`fly.toml`): one always-on machine (`min_machines_running = 1`, `auto_stop_machines = "off"`), `internal_port = 3000`, HTTPS forced, health check on `/api/health`, 256 MB shared CPU. Its `[env]` block sets the AI defaults. Steps: change `app` to a unique name, `fly apps create <name>`, run `fly secrets set AI_API_KEY=...` (optional), then `fly deploy`.
+- **Fly.io** (`fly.toml`): one always-on machine (`min_machines_running = 1`, `auto_stop_machines = "off"`), `internal_port = 3000`, HTTPS forced, health check on `/api/health`, 256 MB shared CPU. Its `[env]` block sets the AI defaults. Live app: `spaceship-logistics-eby`. Steps for a fresh copy: change `app` to a unique name, `fly apps create <name>`, run `fly secrets set AI_API_KEY=...` (optional), then `fly deploy`.
 - **Docker** (`Dockerfile`): two stages on `oven/bun:1`; the runtime image has production dependencies only, runs as `bun` and exposes 3000. `docker build -t logistics . && docker run -p 3000:3000 -e AI_API_KEY=... logistics` (key optional).
 
 - **Render** (`render.yaml`): a Blueprint for a Docker web service with the same health check. `AI_API_KEY` is set in the dashboard (`sync: false`).
 
-No secrets are in the repository. `.env*`, `node_modules`, `dist` and `.git` are excluded from the Docker build context (`.dockerignore`). The container build is not recorded as run in `docs/EVIDENCE.md` (§0).
+No secrets are in the repository. `.env*`, `node_modules`, `dist` and `.git` are excluded from the Docker build context (`.dockerignore`). The live image was built from this `Dockerfile` by Fly's remote builder (`docs/EVIDENCE.md` §0).
 
 ## AI usage disclosure
 
