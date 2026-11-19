@@ -1,5 +1,5 @@
-# Replace app with a globally unique name before `fly launch --no-deploy`.
-app = "logistics-analytics"
+# Fly app name (globally unique).
+app = "spaceship-logistics-eby"
 primary_region = "iad"
 
 [env]
