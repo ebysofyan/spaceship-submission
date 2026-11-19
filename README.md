@@ -227,11 +227,11 @@ Delivery base = `delivered + delayed + exception` (370 orders). In-transit and c
 
 ## Testing
 
-`bun test` runs every workspace: **154 tests in 12 files** at the time of writing. The command prints the current count.
+`bun test` runs every workspace: **182 tests in 14 files** at the time of writing. The command prints the current count.
 
 - **Core** (`packages/core/test`): CSV parsing and lead time; query filters, ranges, buckets, charts and notes; forecast selection, safety stock and warnings; dashboard values against `docs/dataset.md` (400 / 304 / 55 / 370 / 82.2% / 3.83 days / 34.24 / 1310 units).
 - **API** (`apps/api/test`): rules examples and refusals; LLM tool-call handling, including invalid calls and HTTP errors falling back to rules (stubbed endpoint); answer templates; routes, 400 errors, and `/api/ask` end to end.
-- **Web** (`apps/web/src`): header AI badge states, formatting helpers, the dashboard data tables, and the Ask progress card.
+- **Web** (`apps/web/src`): header AI badge states, formatting helpers (including the overall-figure line), hash deep links, forecast controls from the hash, the dashboard data tables, and the Ask progress card.
 
 Not automated: a live LLM call (use `eval-llm.ts`) and the browser UI.
 
