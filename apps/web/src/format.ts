@@ -41,12 +41,16 @@ export function formatMonthSpan(from: string, to: string): string {
   return `${start}–${MONTHS[tm - 1]} ${ty}`;
 }
 
-// Signed gap to the overall figure: rates in points, everything else in its own unit ("+0.32 days", "-51").
-export function formatDelta(value: number, overall: number, metric: Metric, isRate: boolean): string {
-  const diff = value - overall;
-  const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
-  const abs = Math.abs(diff);
-  return sign + (isRate ? `${(abs * 100).toFixed(1)} pts` : formatMetric(abs, metric, false));
+// Line under a KPI chart. Rates and averages get the signed gap to the overall figure; counts and sums are a subset, so they get its share.
+export function formatOverall(value: number, overall: number, metric: Metric, isRate: boolean): string {
+  if (isRate || metric.startsWith("avg_")) {
+    const diff = value - overall;
+    const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
+    const gap = isRate ? `${(Math.abs(diff) * 100).toFixed(1)} pts` : formatMetric(Math.abs(diff), metric, false);
+    return `vs ${formatMetric(overall, metric, isRate)} overall (${sign}${gap})`;
+  }
+  const share = overall ? Math.round((value / overall) * 100) : 0;
+  return `${formatMetric(value, metric, false)} of ${formatMetric(overall, metric, false)} overall (${share}%)`;
 }
 
 export const formatStatus = (status: string) => status.replace("_", " ").replace(/^./, (c) => c.toUpperCase());

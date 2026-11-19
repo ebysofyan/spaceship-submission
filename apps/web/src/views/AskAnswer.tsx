@@ -9,7 +9,7 @@ import { Card } from "../components/ui/Card";
 import { Chip } from "../components/ui/Button";
 import { Disclosure } from "../components/ui/Disclosure";
 import { Notes } from "../components/ui/States";
-import { filterLabel, formatDayRange, formatDelta, formatInt, formatMetric, formatTarget, methodLabel, sourceLabel, toolLabel } from "../format";
+import { filterLabel, formatDayRange, formatInt, formatOverall, formatTarget, methodLabel, sourceLabel, toolLabel } from "../format";
 
 const WHY = /\bwhy\b/i;
 
@@ -43,10 +43,7 @@ export function AnswerCard({
 
       {query && <DynamicChart result={query} />}
       {query?.baseline?.value != null && query.value != null && query.matchedOrders > 0 && (
-        <p className="-mt-3 text-sm text-muted">
-          vs {formatMetric(query.baseline.value, query.spec.metric, query.isRate)} overall (
-          {formatDelta(query.value, query.baseline.value, query.spec.metric, query.isRate)})
-        </p>
+        <p className="-mt-3 text-sm text-muted">{formatOverall(query.value, query.baseline.value, query.spec.metric, query.isRate)}</p>
       )}
       {query && WHY.test(response.question) && (
         <p className="text-sm text-muted">The data has no cause fields, so this shows the figure and how it compares with the overall one.</p>

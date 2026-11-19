@@ -168,6 +168,8 @@ const SUPERLATIVES: Array<[Metric, RegExp]> = [
   ["avg_delivery_days", /\b(slowest|fastest)\b/],
 ];
 
+const SPEED = /\b(slow|fast|long|quick)(er|est|ly)?\b/;
+
 function detectMetric(q: string): Hit<Metric> | undefined {
   // "late" wins over the table so "delivered late" is not read as delivered_count.
   const late = q.match(LATE);
@@ -177,7 +179,10 @@ function detectMetric(q: string): Hit<Metric> | undefined {
       ? { value: "delay_rate", match: `${late[0]} ${rate[0]}` }
       : { value: "delayed_count", match: late[0] };
   }
-  return firstHit(q, METRIC_WORDS);
+  // "slow deliveries" asks about time; a bare "deliver" still counts deliveries.
+  const hit = firstHit(q, METRIC_WORDS);
+  const speed = q.match(SPEED);
+  return hit?.value === "delivered_count" && speed ? { value: "avg_delivery_days", match: speed[0] } : hit;
 }
 
 const GRAINS: Array<[TimeGrain, RegExp]> = [

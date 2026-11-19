@@ -242,6 +242,13 @@ describe("rules router", () => {
     expect(route("delivery time for DHL")).toMatchObject({
       args: { metric: "avg_delivery_days" },
     });
+    expect(route("why are deliveries slow in the EU?")).toMatchObject({
+      tool: "query",
+      args: { metric: "avg_delivery_days", filters: { region: ["EU"] } },
+    });
+    expect(route("How many orders were delivered late last month?")).toMatchObject({
+      args: { metric: "delayed_count" },
+    });
   });
 
   test("several groupings: the first named is used, and the reasoning says the rest were dropped", () => {
