@@ -6,33 +6,14 @@ A single-page analytics app over one read-only logistics dataset (400 orders, 20
 
 - **Data:** `data/mock_logistics_data.csv`, loaded once at boot, never written.
 - **Stack:** Bun 1.4 workspaces · Bun.serve (API + built web app) · Vite + React 19 + TypeScript · Tailwind CSS v4 · Recharts 3 · zod 4 · `bun test`
-- **Hosting:** Fly.io on pay-as-you-go billing (not a trial), one always-on machine, so the URL does not expire or cold-start during review.
 
-## How I approached it as a lead
+## Approach
 
-The brief rewards clarity, correctness and reasoning over polish, and it warns against over-engineering. I ran the project the way I would run a small team: settle what "correct" means first, fix the interfaces, build the risky core with tests, then review, prioritise and ship.
-
-1. **Turn the brief into a checklist.** `docs/requirements.md` splits MUST, SHOULD and BONUS items and ends with a definition of done. Every item there points to evidence in `docs/EVIDENCE.md`.
-2. **Decide the ambiguous definitions before writing code.** The brief does not define "delayed", which orders count in rates, what "last month" means for 2025 data, or the unit of demand. `docs/dataset.md` records each decision and the reference numbers (400 / 304 / 55 / 82.2% / 3.83 days). The dashboard, the Ask tool and the forecast all use the same definitions, and the tests check those numbers.
-3. **Fix the contract, then build in parallel.** `packages/core/src/types.ts` defines the query spec, the forecast spec and the results. With the contract fixed, core, API and web were built in parallel without waiting on each other (`docs/PLAN.md`).
-4. **Separate the three layers the brief names.** Business logic lives in `packages/core`: pure functions with no I/O and no AI. AI interpretation lives in `apps/api/src/ai`. Presentation lives in `apps/web`. Each layer can be tested and replaced on its own.
-5. **Review, prioritise, ship.** After the first deploy I ran an independent review of requirements, security, cost and UX. It produced P0–P2 tasks, each with an owner, the files it may touch and the evidence that proves it done. The review found a P0 that 154 passing tests had missed: one chart rendered blank in the browser. Since then, browser checks are part of the definition of done.
-
-### Decision log
-
-| Decision | Alternatives considered | Why | Trade-off accepted | Revisit when |
-|---|---|---|---|---|
-| The AI routes; it never answers | The LLM writes the answer, or writes SQL | The brief makes the AI an orchestrator, not a source of truth. Every number has to trace to a computation | Answer text comes from templates and is less fluent than model prose | Narrative summaries are needed: let the model narrate over computed JSON and check its numbers |
-| Typed spec + zod allow-lists, no SQL | Text-to-SQL with validation | Nothing to inject into, and each spec is unit-testable | Fixed set of 9 metrics, one grouping per question | Data outgrows memory: compile the same spec to parameterised SQL |
-| Rules router as the no-key default and the fallback | LLM only | The app works with no key, during an outage, and at zero cost | Keyword matching understands fewer phrasings, so it refuses rather than guesses | — |
-| CSV in memory, no database | Postgres | 400 read-only rows, deterministic results, nothing to operate | A changed CSV needs a restart | Live data, or more than about 100k rows |
-| One Bun process serves the API and the SPA | Next.js, or separate frontend hosting | One deploy, one URL, no CORS | No server rendering | SEO or multi-page needs |
-| Definitions fixed up front (status-based "delayed", 370 delivery base, data-anchored dates) | Wall-clock dates; lateness from lead time | The brief is ambiguous; one definition keeps all three surfaces consistent | May differ from the client's SLA | The client provides promised delivery dates |
-| Forecast: 3 simple methods, chosen by holdout MAE, category level by default | ARIMA or Prophet | The brief limits the methods, and most SKUs have only 1–2 orders | No seasonality | Two or more years of history |
-| Cost guardrails: cache, `max_tokens` 300, prompt trimmed from about 8k to 1.6k tokens, per-IP and global daily caps | Rely on a provider spend cap | The reviewers' URL must stay usable even if someone abuses it | Counters live in one process | More than one instance: move them to Redis |
-| Three tabs: Dashboard / Ask / Forecast, linked to each other | A single chat screen | They map to the brief's descriptive / diagnostic / predictive levels, and the dashboard needs no typing | More navigation, mitigated by follow-up links between tabs | User research says otherwise |
-
-**Deliberately not built** (simple but correct): authentication, a database, streaming answers, Redis, multi-dimension queries, and clarifying follow-up questions. Each is listed under Limitations or Future improvements with the trigger that would justify it.
+- **Definitions before code.** The brief leaves "delayed", the rate base, relative dates and the demand unit open. Each is decided once in `docs/dataset.md`, with reference numbers (400 / 304 / 55 / 82.2% / 3.83 days) that the tests assert. The dashboard, Ask and Forecast share these definitions.
+- **Contract first.** `packages/core/src/types.ts` fixes the query spec, forecast spec and result shapes, so core, API and web could move independently (`docs/PLAN.md`).
+- **Three layers, as the brief asks.** Business logic in `packages/core` (pure, no I/O, no AI), AI interpretation in `apps/api/src/ai`, presentation in `apps/web`.
+- **Done means evidenced.** `docs/requirements.md` ends with a definition of done. Each item links to tests or live output in `docs/EVIDENCE.md`, including browser checks: tests alone missed a chart that rendered blank.
+- **Not built on purpose:** auth, a database, streaming, Redis, multi-dimension queries, clarifying questions. See Limitations and Future improvements for what would justify each.
 
 ## Setup
 
@@ -103,12 +84,16 @@ apps/web/src       Vite + React SPA: views Dashboard, Ask, Forecast
 
 ### Key design decisions
 
-- **Structured queries, not SQL.** The interpreter produces a typed spec: an allow-listed metric, dimension, grain, filters and date range. No SQL is generated or run.
-- **Zod is the trust boundary.** Allowed values come from the loaded data, objects are strict, and unknown keys are rejected. Core validates again, so the API routes get the same checks.
-- **Metrics are defined once.** `metrics.ts` feeds the KPIs, the query tool, the chart labels and the explanations, so they cannot disagree.
-- **The AI never answers.** Answer sentences are templates over core results. No model text reaches the screen, and every number comes from core.
-- **No database, no HTTP framework.** 400 read-only rows fit in memory. `Bun.serve({ routes })` covers five endpoints plus static files.
-- **Vite SPA, not Next.js.** One page with client-side tabs; no server rendering or SEO need.
+| Decision | Why | Trade-off, and when to revisit |
+|---|---|---|
+| **The AI routes; it never answers.** The model picks a tool and its arguments; core computes; answer text is a template | Every number traces to a computation. No model text reaches the screen | Less fluent prose. If narrative summaries are needed, let the model narrate over computed JSON and check its numbers |
+| **Typed spec with zod allow-lists, no SQL** | Nothing to inject into. Allowed values come from the loaded data; core validates again | Fixed set of 9 metrics, one grouping per query. At scale, compile the same spec to parameterised SQL |
+| **Rules router as the no-key default and the fallback** | Works with no key, during an outage, and at zero cost | Understands fewer phrasings, so it refuses rather than guesses |
+| **Metrics defined once** (`metrics.ts`) | KPIs, queries, chart labels and explanations cannot disagree | — |
+| **CSV in memory, no database; one Bun process serves API and SPA** | 400 read-only rows, deterministic results, one deploy and one URL, no CORS | A changed CSV needs a restart. Revisit for live data, more than about 100k rows, or SSR/SEO needs |
+| **Forecast: three simple methods, chosen by holdout MAE** | The brief limits the methods, and most SKUs have one or two orders, so category level is the useful default | No seasonality until there are two or more years of history |
+| **Cost guardrails:** cache, `max_tokens` 300, prompt trimmed from about 8k to 1.6k tokens, per-IP and global daily caps | A public URL must stay usable if someone abuses it; abuse degrades to keyword answers, not an outage or a bill | Counters live in one process; move them to Redis for more than one instance |
+| **Three tabs (Dashboard / Ask / Forecast), linked to each other** | They map to the descriptive / diagnostic / predictive levels, and the dashboard needs no typing | More navigation, offset by follow-up links between tabs |
 
 ### Data flow
 
@@ -287,6 +272,6 @@ No secrets are in the repository. `.env*`, `node_modules`, `dist` and `.git` are
 
 ## AI usage disclosure
 
-This project was built with AI coding agents, and I worked as the lead. I set the requirements, the metric definitions and the architecture, and I accepted or rejected each change. A coordinating agent (Claude, running in pi) split the work into tasks with file ownership and dispatched them to worker agents through Orca orchestration. A later review pass (P0–P2 tasks, `docs/PLAN.md`) used the same setup, with the `impeccable` design skill for UI critique. Outputs were checked against `docs/dataset.md`, the test suite, and browser screenshots of the live app.
+This project was built with AI coding agents. I set the requirements, the metric definitions and the architecture, and reviewed every change. A coordinating agent (Claude, running in pi) split the work into tasks with file ownership and dispatched them to worker agents through Orca orchestration. A later review pass (P0–P2 tasks, `docs/PLAN.md`) used the same setup, with the `impeccable` design skill for UI critique. Outputs were checked against `docs/dataset.md`, the test suite, and browser screenshots of the live app.
 
 At runtime the AI is optional. It only chooses a tool and its arguments. Every number comes from the deterministic core, and answer text is a template over those results.
